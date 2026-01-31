@@ -1,0 +1,9 @@
+
+To get the cardtrader search right call api https://api.cardtrader.com/api/v2/expansions (and filtering for game = 1)  to get the list of expansions. KEeep this list cached in order not to call too many times the api. do it max 1 time per day.
+
+After that, when clicking the cardtrader button generate the redirect link by correlating the expansion code with the field code of the returned json. 
+Then call the /api/v2/blueprints/export api of cardtrader by passing the expansion id of the found expansion as parameter expansion_id. A list of cards will be returned. You should filter the card with the collector number by checking the "fixed_properties": {
+            "mtg_rarity": "Mythic",
+            "collector_number": "127"
+        }, field returned as json.
+This has to happen only after i click the cardtrader link and only if logged in

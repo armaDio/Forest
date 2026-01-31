@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Forest Collection Tracker - Magic: The Gathering</title>
+    <link rel="stylesheet" href="styles.css">
+</head>
+<body>
+    <div class="container">
+        <header>
+            <div class="header-top">
+                <h1 class="header-title">🌲 Forest Collection Tracker</h1>
+                <div id="auth-status" class="auth-status">
+                    <span id="auth-username" class="auth-username"></span>
+                    <button id="logout-btn" class="logout-button">Logout</button>
+                </div>
+                <div id="login-prompt" class="login-prompt">
+                    <a href="/login.html" class="login-link">Login to Edit</a>
+                </div>
+            </div>
+            <div class="filter-container">
+                <div class="filter-row">
+                    <div class="filter-item">
+                        <label for="set-filter">Filter by Expansion:</label>
+                        <select id="set-filter" class="set-filter">
+                            <option value="">All Expansions</option>
+                        </select>
+                    </div>
+                    <div class="filter-item">
+                        <label for="status-filter">Filter by Status:</label>
+                        <select id="status-filter" class="set-filter">
+                            <option value="">All Status</option>
+                            <option value="collected">Collected</option>
+                            <option value="bought">Bought</option>
+                            <option value="uncollected">Uncollected</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">Total Cards:</span>
+                    <span class="stat-value" id="total-cards">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Collected:</span>
+                    <span class="stat-value" id="collected-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Bought:</span>
+                    <span class="stat-value" id="bought-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Missing:</span>
+                    <span class="stat-value" id="missing-count">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">Progress:</span>
+                    <span class="stat-value" id="progress-percent">0%</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <p>Loading Forest cards...</p>
+        </div>
+
+        <div class="cards-grid" id="cards-grid"></div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
