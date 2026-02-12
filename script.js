@@ -11,7 +11,7 @@ let isAuthenticated = false;
 // Fetch all Forest cards from Scryfall API
 async function fetchAllForests() {
     const allCards = [];
-    let url = 'https://api.scryfall.com/cards/search?q=Forest+(type:land+type:basic)+(game:paper)+unique:prints&order=released&unique=cards';
+    let url = 'https://api.scryfall.com/cards/search?q=!Forest+(game:paper)+include:extras+unique:prints&unique=cards';
     
     while (url) {
         try {
