@@ -7,6 +7,7 @@ let boughtCache = {};
 let cardtraderOverrides = {}; // Store per-card expansion code overrides
 let dataLoaded = false;
 let isAuthenticated = false;
+let currentGiftInfo = null;
 
 // Get card ID from URL
 function getCardIdFromUrl() {
@@ -172,6 +173,22 @@ function formatPrice(price) {
     return `$${parseFloat(price).toFixed(2)}`;
 }
 
+// --- Gifts ---
+async function fetchGiftInfo(cardId) {
+    try {
+        const res = await fetch(`/api/gifts/card/${encodeURIComponent(cardId)}`);
+        if (!res.ok) {
+            console.error('Failed to fetch gift info for card:', cardId, res.status);
+            return null;
+        }
+        const data = await res.json();
+        return data.gift || null;
+    } catch (err) {
+        console.error('Error fetching gift info:', err);
+        return null;
+    }
+}
+
 // Fetch all Forest cards from Scryfall API (for binder position)
 async function fetchAllForests() {
     const allCards = [];
@@ -239,29 +256,21 @@ function showCardtraderOverrideModal(cardId, currentSet) {
     if (!modal) {
         modal = document.createElement('div');
         modal.id = 'cardtrader-override-modal';
-        modal.style.position = 'fixed';
-        modal.style.top = '0';
-        modal.style.left = '0';
-        modal.style.width = '100%';
-        modal.style.height = '100%';
-        modal.style.background = 'rgba(0,0,0,0.7)';
-        modal.style.display = 'flex';
-        modal.style.alignItems = 'center';
-        modal.style.justifyContent = 'center';
-        modal.style.zIndex = '9999';
+        modal.className = 'gift-modal-overlay';
         modal.innerHTML = `
-            <div style="background:#fff; padding:20px; border-radius:8px; max-width:300px; width:100%;">
+            <div class="gift-modal">
                 <h3>Override Cardtrader Set</h3>
-                <p>Card ID: ${cardId}</p>
-                <input type="text" id="override-input" style="width:100%; margin-bottom:10px;" placeholder="Enter Cardtrader set code" />
-                <div style="text-align:right;">
-                    <button id="override-cancel">Cancel</button>
-                    <button id="override-save">Save</button>
+                <p>Enter the Cardtrader expansion code to use for this card.</p>
+                <p class="override-card-id">Card ID: <code id="override-card-id"></code></p>
+                <input type="text" id="override-input" class="gift-input" placeholder="Enter Cardtrader set code" />
+                <div class="gift-modal-actions">
+                    <button id="override-cancel" class="gift-cancel-button">Cancel</button>
+                    <button id="override-save" class="gift-confirm-button">Save</button>
                 </div>
             </div>
         `;
         document.body.appendChild(modal);
-        document.getElementById('override-cancel').onclick = () => modal.style.display = 'none';
+        document.getElementById('override-cancel').onclick = () => { modal.style.display = 'none'; };
         document.getElementById('override-save').onclick = async () => {
             const code = document.getElementById('override-input').value.trim().toUpperCase();
             if (!code) return alert('Set code cannot be empty');
@@ -270,6 +279,10 @@ function showCardtraderOverrideModal(cardId, currentSet) {
             const card = allCards.find(c => c.id === cardId);
             if (card) createDetailView(card);
         };
+    }
+    const cardIdEl = document.getElementById('override-card-id');
+    if (cardIdEl) {
+        cardIdEl.textContent = cardId;
     }
     document.getElementById('override-input').value = cardtraderOverrides[cardId] || currentSet || '';
     modal.style.display = 'flex';
@@ -325,8 +338,10 @@ function getPurchaseLinks(card) {
     let linksHtml = '<div class="purchase-links">';
     if (cardmarketUrl) linksHtml += `<a href="${cardmarketUrl}" target="_blank" rel="noopener noreferrer" class="purchase-link cardmarket-link">🛒 Cardmarket</a>`;
     linksHtml += `
-        <a href="#" class="purchase-link cardtrader-link" onclick="handleCardtraderClick(event, '${card.id}')">🛒 Cardtrader</a>`
-    if(isAuthenticated) linksHtml += `<a href="#" class="purchase-link cardtrader-override" style="margin-left:5px; font-size:0.9em;" onclick="showCardtraderOverrideModal('${card.id}', '${card.set?.toUpperCase() || ''}')">⚙️ Override</a>`;
+        <a href="#" class="purchase-link cardtrader-link" onclick="handleCardtraderClick(event, '${card.id}')">🛒 Cardtrader</a>`;
+    if (isAuthenticated) {
+        linksHtml += `<a href="#" class="purchase-link cardtrader-override" onclick="showCardtraderOverrideModal('${card.id}', '${card.set?.toUpperCase() || ''}')">⚙️ Override</a>`;
+    }
     linksHtml += '</div>';
     return linksHtml;
 }
@@ -338,6 +353,13 @@ function createDetailView(card) {
     const binderPos = getBinderPosition(card.id);
     const binderInfo = binderPos ? `Page ${binderPos.page}, Slot ${binderPos.slot} (Row ${binderPos.row}, Column ${binderPos.column})` : 'N/A';
     const container = document.getElementById('detail-container');
+
+    const giftSection = currentGiftInfo
+        ? `<div class="detail-section">
+                <h3>Gift</h3>
+                <p><strong>Gifted by:</strong> ${currentGiftInfo.giverName}</p>
+           </div>`
+        : '';
 
     container.innerHTML = `
         <div class="detail-card">
@@ -367,6 +389,7 @@ function createDetailView(card) {
                 </div>
                 ${card.prices ? `<div class="detail-section"><h3>Pricing</h3>${card.prices.usd ? `<p><strong>USD:</strong> ${formatPrice(card.prices.usd)}</p>` : ''}${card.prices.usd_foil ? `<p><strong>USD Foil:</strong> ${formatPrice(card.prices.usd_foil)}</p>` : ''}${card.prices.eur ? `<p><strong>EUR:</strong> €${parseFloat(card.prices.eur).toFixed(2)}</p>` : ''}${card.prices.eur_foil ? `<p><strong>EUR Foil:</strong> €${parseFloat(card.prices.eur_foil).toFixed(2)}</p>` : ''}</div>` : ''}
                 ${card.legalities ? `<div class="detail-section"><h3>Legalities</h3><p><strong>Standard:</strong> ${card.legalities.standard || 'N/A'}</p><p><strong>Modern:</strong> ${card.legalities.modern || 'N/A'}</p><p><strong>Legacy:</strong> ${card.legalities.legacy || 'N/A'}</p><p><strong>Commander:</strong> ${card.legalities.commander || 'N/A'}</p></div>` : ''}
+                ${giftSection}
                 ${!isCollectedStatus ? `<div class="detail-section"><h3>Purchase</h3>${getPurchaseLinks(card)}</div>` : ''}
                 ${isBoughtStatus && !isCollectedStatus ? `<div class="detail-section bought-status-section"><h3>📦 Status</h3><p><strong>This card has been purchased and is awaiting delivery.</strong></p></div>` : ''}
                 <div class="detail-action-buttons">
@@ -379,10 +402,77 @@ function createDetailView(card) {
                         isBoughtStatus ? `<div class="status-display bought-status">📦 Bought</div>` :
                         `<div class="status-display not-collected-status">Not Collected</div>`
                     )}
+                    <button class="detail-gift-button" onclick="showGiftModal('${card.id}')">Gift this card</button>
                 </div>
             </div>
         </div>
     `;
+}
+
+// Show gift modal on the detail page
+function showGiftModal(cardId) {
+    let modal = document.getElementById('gift-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'gift-modal';
+        modal.className = 'gift-modal-overlay';
+        modal.innerHTML = `
+            <div class="gift-modal">
+                <h3>Gift this card</h3>
+                <p>Enter the name of the person who is gifting this card.</p>
+                <input type="text" id="gift-giver-name" class="gift-input" placeholder="Your name">
+                <div class="gift-modal-actions">
+                    <button id="gift-cancel-button" class="gift-cancel-button">Cancel</button>
+                    <button id="gift-confirm-button" class="gift-confirm-button">Send Gift</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'flex';
+
+    const nameInput = document.getElementById('gift-giver-name');
+    const cancelBtn = document.getElementById('gift-cancel-button');
+    const confirmBtn = document.getElementById('gift-confirm-button');
+
+    if (nameInput) {
+        nameInput.value = '';
+        nameInput.focus();
+    }
+
+    const closeModal = () => {
+        modal.style.display = 'none';
+    };
+
+    cancelBtn.onclick = () => {
+        closeModal();
+    };
+
+    confirmBtn.onclick = async () => {
+        const giverName = nameInput ? nameInput.value.trim() : '';
+        if (!giverName) {
+            alert('Please enter a name.');
+            return;
+        }
+        try {
+            const response = await fetch('/api/gifts', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ cardId, giverName })
+            });
+            if (!response.ok) {
+                console.error('Failed to create gift from detail page:', response.status);
+                alert('Unable to send gift. Please try again later.');
+                return;
+            }
+            alert('Thank you! Your gift has been recorded and will appear for confirmation.');
+            closeModal();
+        } catch (err) {
+            console.error('Error creating gift from detail page:', err);
+            alert('Unable to send gift. Please try again later.');
+        }
+    };
 }
 
 // Handle collect button click
@@ -391,7 +481,10 @@ async function handleCollect(cardId) {
     const isNowCollected = await toggleCollection(cardId);
     if (isNowCollected) { const bought = getBought(); if (bought[cardId]) { bought[cardId] = false; await saveBought(bought); } }
     const card = allCards.find(c => c.id === cardId);
-    if (card) createDetailView(card);
+    if (card) {
+        currentGiftInfo = await fetchGiftInfo(cardId);
+        createDetailView(card);
+    }
 }
 
 // Handle bought button click
@@ -400,7 +493,10 @@ async function handleBought(cardId) {
     await toggleBought(cardId);
     await checkCardtraderAvailability();
     const card = allCards.find(c => c.id === cardId);
-    if (card) createDetailView(card);
+    if (card) {
+        currentGiftInfo = await fetchGiftInfo(cardId);
+        createDetailView(card);
+    }
 }
 
 // Check authentication status
@@ -428,8 +524,13 @@ async function init() {
         if (isAuthenticated) await checkCardtraderAvailability();
         await loadData();
         await loadCardtraderOverrides();
-        const [card, cards] = await Promise.all([fetchCardDetails(cardId), fetchAllForests()]);
+        const [card, cards, giftInfo] = await Promise.all([
+            fetchCardDetails(cardId),
+            fetchAllForests(),
+            fetchGiftInfo(cardId)
+        ]);
         allCards = sortCards(cards);
+        currentGiftInfo = giftInfo;
         loadingDiv.style.display = 'none';
         createDetailView(card);
     } catch (error) {
@@ -443,6 +544,7 @@ window.handleCollect = handleCollect;
 window.handleBought = handleBought;
 window.handleCardtraderClick = handleCardtraderClick;
 window.showCardtraderOverrideModal = showCardtraderOverrideModal;
+window.showGiftModal = showGiftModal;
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);

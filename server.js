@@ -9,17 +9,21 @@ const fetch = require('node-fetch');
 const app = express();
 const PORT = process.env.PORT || 3000;
 
+// Base data directory (overridable for tests)
+const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
+
 // Authentication credentials
 const AUTH_USERNAME = process.env.AUTH_USERNAME || 'armaDio';
 const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH || 'REDACTED'; // Plain text default (insecure!)
 
 // File paths
-const COLLECTION_FILE = path.join(__dirname, 'data', 'collection.json');
-const BOUGHT_FILE = path.join(__dirname, 'data', 'bought.json');
-const CARDTRADER_TOKEN_FILE = path.join(__dirname, 'data', 'cardtrader_token.txt');
-const CARDTRADER_BLUEPRINTS_CACHE_DIR = path.join(__dirname, 'data', 'cardtrader_blueprints_cache');
-const CARDTRADER_EXPANSIONS_CACHE = path.join(__dirname, 'data', 'cardtrader_expansions_cache.json');
-const CARDTRADER_OVERRIDES_FILE = path.join(__dirname, 'data', 'cardtrader_overrides.json');
+const COLLECTION_FILE = path.join(DATA_DIR, 'collection.json');
+const BOUGHT_FILE = path.join(DATA_DIR, 'bought.json');
+const CARDTRADER_TOKEN_FILE = path.join(DATA_DIR, 'cardtrader_token.txt');
+const CARDTRADER_BLUEPRINTS_CACHE_DIR = path.join(DATA_DIR, 'cardtrader_blueprints_cache');
+const CARDTRADER_EXPANSIONS_CACHE = path.join(DATA_DIR, 'cardtrader_expansions_cache.json');
+const CARDTRADER_OVERRIDES_FILE = path.join(DATA_DIR, 'cardtrader_overrides.json');
+const GIFTS_FILE = path.join(DATA_DIR, 'gifts.json');
 
 // --- Middleware ---
 app.use(cors({ origin: true, credentials: true }));
@@ -60,11 +64,25 @@ async function getCardtraderToken() {
 
 // Ensure data directories exist
 async function ensureDataDir() {
-    const dataDir = path.join(__dirname, 'data');
-    try { await fs.access(dataDir); } catch { await fs.mkdir(dataDir, { recursive: true }); }
+    try { await fs.access(DATA_DIR); } catch { await fs.mkdir(DATA_DIR, { recursive: true }); }
     try { await fs.access(CARDTRADER_BLUEPRINTS_CACHE_DIR); } catch { await fs.mkdir(CARDTRADER_BLUEPRINTS_CACHE_DIR, { recursive: true }); }
 }
 ensureDataDir().catch(console.error);
+
+// Gifts helpers
+async function readGifts() {
+    try {
+        const data = await fs.readFile(GIFTS_FILE, 'utf8');
+        return JSON.parse(data);
+    } catch (err) {
+        if (err.code === 'ENOENT') return [];
+        throw err;
+    }
+}
+
+async function writeGifts(gifts) {
+    await fs.writeFile(GIFTS_FILE, JSON.stringify(gifts, null, 2), 'utf8');
+}
 
 // Authentication middleware
 function requireAuth(req, res, next) {
@@ -236,7 +254,132 @@ app.post('/api/bought', requireAuth, async (req, res) => {
     try { await writeDataFile(BOUGHT_FILE, req.body); res.json({ success: true }); } catch { res.status(500).json({ error: 'Failed to save bought cards' }); }
 });
 
-// --- Start server ---
-app.listen(PORT, () => {
-    console.log(`Server running on http://localhost:${PORT}`);
+// --- Gifts ---
+// Create a new gift (public, no auth required)
+app.post('/api/gifts', async (req, res) => {
+    try {
+        const { cardId, giverName } = req.body || {};
+        if (!cardId || !giverName || typeof giverName !== 'string' || !giverName.trim()) {
+            return res.status(400).json({ error: 'Missing or invalid cardId or giverName' });
+        }
+
+        const gifts = await readGifts();
+        const newGift = {
+            id: Date.now().toString(),
+            cardId,
+            giverName: giverName.trim(),
+            status: 'pending',
+            createdAt: new Date().toISOString()
+        };
+        gifts.push(newGift);
+        await writeGifts(gifts);
+        res.json({ success: true, gift: newGift });
+    } catch (err) {
+        console.error('Error creating gift:', err);
+        res.status(500).json({ error: 'Failed to create gift' });
+    }
 });
+
+// Get all pending gifts (for the logged-in collector)
+app.get('/api/gifts/pending', requireAuth, async (req, res) => {
+    try {
+        const gifts = await readGifts();
+        const pending = gifts.filter(g => g.status === 'pending');
+        res.json(pending);
+    } catch (err) {
+        console.error('Error reading pending gifts:', err);
+        res.status(500).json({ error: 'Failed to read pending gifts' });
+    }
+});
+
+// Accept a gift: mark as collected and save gifter name
+app.post('/api/gifts/:id/accept', requireAuth, async (req, res) => {
+    try {
+        const giftId = req.params.id;
+        const gifts = await readGifts();
+        const gift = gifts.find(g => g.id === giftId);
+        if (!gift) {
+            return res.status(404).json({ error: 'Gift not found' });
+        }
+        if (gift.status !== 'pending') {
+            return res.status(400).json({ error: 'Gift is not pending' });
+        }
+
+        gift.status = 'accepted';
+        gift.processedAt = new Date().toISOString();
+
+        const collection = await readDataFile(COLLECTION_FILE);
+        collection[gift.cardId] = true;
+
+        await Promise.all([
+            writeGifts(gifts),
+            writeDataFile(COLLECTION_FILE, collection)
+        ]);
+
+        res.json({ success: true, gift, collection });
+    } catch (err) {
+        console.error('Error accepting gift:', err);
+        res.status(500).json({ error: 'Failed to accept gift' });
+    }
+});
+
+// Reject a gift: mark as rejected, do not change collection
+app.post('/api/gifts/:id/reject', requireAuth, async (req, res) => {
+    try {
+        const giftId = req.params.id;
+        const gifts = await readGifts();
+        const gift = gifts.find(g => g.id === giftId);
+        if (!gift) {
+            return res.status(404).json({ error: 'Gift not found' });
+        }
+        if (gift.status !== 'pending') {
+            return res.status(400).json({ error: 'Gift is not pending' });
+        }
+
+        gift.status = 'rejected';
+        gift.processedAt = new Date().toISOString();
+
+        await writeGifts(gifts);
+        res.json({ success: true, gift });
+    } catch (err) {
+        console.error('Error rejecting gift:', err);
+        res.status(500).json({ error: 'Failed to reject gift' });
+    }
+});
+
+// Public endpoint: get accepted gift info for a specific card
+app.get('/api/gifts/card/:cardId', async (req, res) => {
+    try {
+        const cardId = req.params.cardId;
+        const gifts = await readGifts();
+        const accepted = gifts.filter(g => g.cardId === cardId && g.status === 'accepted');
+        if (accepted.length === 0) {
+            return res.json({ gift: null });
+        }
+        accepted.sort((a, b) => {
+            const da = new Date(a.processedAt || a.createdAt || 0).getTime();
+            const db = new Date(b.processedAt || b.createdAt || 0).getTime();
+            return db - da;
+        });
+        const latest = accepted[0];
+        res.json({
+            gift: {
+                giverName: latest.giverName,
+                processedAt: latest.processedAt || latest.createdAt
+            }
+        });
+    } catch (err) {
+        console.error('Error reading gift for card:', err);
+        res.status(500).json({ error: 'Failed to read gift for card' });
+    }
+});
+
+// --- Start server (only when run directly) ---
+if (require.main === module) {
+    app.listen(PORT, () => {
+        console.log(`Server running on http://localhost:${PORT}`);
+    });
+}
+
+// Export app for testing
+module.exports = { app };

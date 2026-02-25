@@ -202,6 +202,120 @@ header h1 {
     text-shadow: 0 2px 4px rgba(0, 0, 0, 0.1);
 }
 
+/* Gifts section */
+.gifts-section {
+    margin-top: 25px;
+    padding-top: 20px;
+    border-top: 1px solid rgba(230, 230, 255, 0.8);
+}
+
+.gifts-section h2 {
+    font-size: 1.4em;
+    margin-bottom: 15px;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    font-weight: 700;
+}
+
+.gifts-list {
+    display: flex;
+    flex-direction: column;
+    gap: 12px;
+}
+
+.gifts-empty {
+    font-size: 0.95em;
+    color: #777;
+}
+
+.gift-item {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 12px;
+    padding: 12px 16px;
+    border-radius: 14px;
+    background: linear-gradient(135deg, #f8f9ff 0%, #ffffff 100%);
+    box-shadow: 0 2px 8px rgba(0, 0, 0, 0.05);
+    border-left: 4px solid #667eea;
+}
+
+.gift-card-info {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex: 1;
+}
+
+.gift-card-image {
+    width: 40px;
+    height: 56px;
+    border-radius: 6px;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.25);
+    object-fit: cover;
+}
+
+.gift-text p {
+    margin: 0;
+}
+
+.gift-text strong {
+    color: #667eea;
+}
+
+.gift-meta {
+    font-size: 0.85em;
+    color: #555;
+    margin-top: 2px;
+}
+
+.gift-date {
+    font-size: 0.8em;
+    color: #888;
+    margin-top: 2px;
+}
+
+.gift-actions {
+    display: flex;
+    gap: 8px;
+}
+
+.gift-accept-button,
+.gift-reject-button {
+    padding: 8px 12px;
+    border-radius: 10px;
+    border: none;
+    font-size: 0.85em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+    white-space: nowrap;
+}
+
+.gift-accept-button {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+}
+
+.gift-accept-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 10px rgba(17, 153, 142, 0.35);
+}
+
+.gift-reject-button {
+    background: #f3f3f7;
+    color: #666;
+    border: 1px solid #ddd;
+}
+
+.gift-reject-button:hover {
+    background: #e8e8f0;
+    transform: translateY(-1px);
+}
+
 .back-button {
     display: inline-block;
     padding: 12px 24px;
@@ -384,6 +498,19 @@ header h1 {
     box-shadow: 0 4px 12px rgba(68, 160, 141, 0.4);
 }
 
+.cardtrader-override {
+    background: #f3f3f7;
+    color: #555;
+    border: 1px dashed #667eea;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.08);
+}
+
+.cardtrader-override:hover {
+    background: #e8e8f5;
+    transform: translateY(-2px);
+    box-shadow: 0 4px 10px rgba(102, 126, 234, 0.3);
+}
+
 .collect-button {
     flex: 1;
     padding: 12px;
@@ -434,6 +561,25 @@ header h1 {
     display: flex;
     flex-direction: row;
     gap: 10px;
+}
+
+.gift-button {
+    padding: 10px 12px;
+    border-radius: 12px;
+    border: none;
+    font-size: 0.9em;
+    font-weight: 700;
+    cursor: pointer;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(245, 87, 108, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    white-space: nowrap;
+}
+
+.gift-button:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(245, 87, 108, 0.4);
 }
 
 .bought-button {
@@ -595,6 +741,119 @@ header h1 {
     flex-direction: row;
     gap: 15px;
     margin-top: 20px;
+}
+
+.detail-gift-button {
+    padding: 14px 20px;
+    border-radius: 14px;
+    border: none;
+    font-size: 1em;
+    font-weight: 700;
+    cursor: pointer;
+    background: linear-gradient(135deg, #f093fb 0%, #f5576c 100%);
+    color: white;
+    box-shadow: 0 4px 15px rgba(245, 87, 108, 0.35);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.detail-gift-button:hover {
+    transform: translateY(-3px);
+    box-shadow: 0 6px 22px rgba(245, 87, 108, 0.45);
+}
+
+/* Gift modal (shared) */
+.gift-modal-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.55);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999;
+}
+
+.gift-modal {
+    background: #ffffff;
+    border-radius: 18px;
+    padding: 24px 24px 20px;
+    max-width: 360px;
+    width: 100%;
+    box-shadow: 0 16px 40px rgba(0, 0, 0, 0.35);
+    border: 1px solid rgba(255, 255, 255, 0.6);
+}
+
+.gift-modal h3 {
+    margin-bottom: 8px;
+    font-size: 1.3em;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+}
+
+.gift-modal p {
+    font-size: 0.95em;
+    color: #555;
+    margin-bottom: 14px;
+}
+
+.override-card-id {
+    font-size: 0.85em;
+    color: #777;
+    margin-bottom: 10px;
+}
+
+.gift-input {
+    width: 100%;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid #ddd;
+    font-size: 0.95em;
+    margin-bottom: 16px;
+    outline: none;
+    transition: border-color 0.2s, box-shadow 0.2s;
+}
+
+.gift-input:focus {
+    border-color: #667eea;
+    box-shadow: 0 0 0 3px rgba(102, 126, 234, 0.2);
+}
+
+.gift-modal-actions {
+    display: flex;
+    justify-content: flex-end;
+    gap: 8px;
+}
+
+.gift-cancel-button,
+.gift-confirm-button {
+    padding: 8px 14px;
+    border-radius: 10px;
+    border: none;
+    font-size: 0.9em;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.gift-cancel-button {
+    background: #f3f3f7;
+    color: #666;
+}
+
+.gift-cancel-button:hover {
+    background: #e4e4ee;
+}
+
+.gift-confirm-button {
+    background: linear-gradient(135deg, #11998e 0%, #38ef7d 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(17, 153, 142, 0.3);
+}
+
+.gift-confirm-button:hover {
+    transform: translateY(-1px);
+    box-shadow: 0 4px 12px rgba(17, 153, 142, 0.4);
 }
 
 .detail-bought-button {
@@ -767,5 +1026,16 @@ html {
     .stat-item {
         min-width: 100%;
         padding: 18px 25px;
+    }
+
+    .gift-item {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+
+    .gift-actions {
+        width: 100%;
+        justify-content: flex-end;
+        margin-top: 8px;
     }
 }

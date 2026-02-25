@@ -7,6 +7,7 @@ let collectionCache = {};
 let boughtCache = {};
 let dataLoaded = false;
 let isAuthenticated = false;
+let pendingGifts = [];
 
 // Fetch all Forest cards from Scryfall API
 async function fetchAllForests() {
@@ -158,6 +159,13 @@ async function updateAuthUI() {
     if (wasAuthenticated !== isAuthenticated && dataLoaded) {
         rerenderCards();
     }
+
+    // Load gifts list for authenticated user
+    if (isAuthenticated && dataLoaded) {
+        await loadPendingGifts();
+    } else {
+        hideGiftsSection();
+    }
 }
 
 // Load collection and bought data from server
@@ -180,6 +188,160 @@ async function loadData() {
     } catch (error) {
         console.error('Error loading data:', error);
         dataLoaded = true; // Set to true even on error to prevent infinite loading
+    }
+}
+
+// --- Gifts ---
+async function createGift(cardId, giverName) {
+    try {
+        const response = await fetch('/api/gifts', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json'
+            },
+            body: JSON.stringify({ cardId, giverName })
+        });
+
+        if (!response.ok) {
+            throw new Error('Failed to create gift');
+        }
+
+        const data = await response.json();
+        return data.gift;
+    } catch (error) {
+        console.error('Error creating gift:', error);
+        alert('Unable to send gift. Please try again later.');
+        throw error;
+    }
+}
+
+async function loadPendingGifts() {
+    const giftsSection = document.getElementById('gifts-section');
+    if (!giftsSection) return;
+
+    if (!isAuthenticated) {
+        hideGiftsSection();
+        return;
+    }
+
+    try {
+        const response = await fetch('/api/gifts/pending', {
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            console.error('Failed to load pending gifts:', response.status);
+            hideGiftsSection();
+            return;
+        }
+        pendingGifts = await response.json();
+        renderPendingGifts();
+    } catch (error) {
+        console.error('Error loading pending gifts:', error);
+        hideGiftsSection();
+    }
+}
+
+function hideGiftsSection() {
+    const giftsSection = document.getElementById('gifts-section');
+    if (giftsSection) {
+        giftsSection.style.display = 'none';
+    }
+}
+
+function renderPendingGifts() {
+    const giftsSection = document.getElementById('gifts-section');
+    const giftsList = document.getElementById('gifts-list');
+    if (!giftsSection || !giftsList) return;
+
+    if (!isAuthenticated || !pendingGifts || pendingGifts.length === 0) {
+        giftsSection.style.display = 'none';
+        giftsList.innerHTML = '<p class="gifts-empty">No pending gifts.</p>';
+        return;
+    }
+
+    giftsSection.style.display = 'block';
+    giftsList.innerHTML = '';
+
+    pendingGifts.forEach(gift => {
+        const card = allCards.find(c => c.id === gift.cardId);
+        const setName = card?.set_name || '';
+        const collectorNumber = card?.collector_number || '';
+        const item = document.createElement('div');
+        item.className = 'gift-item';
+        item.innerHTML = `
+            <div class="gift-card-info">
+                ${card ? `<img src="${card.image_uris?.small || card.image_uris?.normal || ''}" alt="${card.name}" class="gift-card-image">` : ''}
+                <div class="gift-text">
+                    <p><strong>${gift.giverName}</strong> gifted you ${card ? `"${card.name}"` : 'a card'}.</p>
+                    ${card ? `<p class="gift-meta">${setName}${collectorNumber ? ` · #${collectorNumber}` : ''}</p>` : ''}
+                    ${gift.createdAt ? `<p class="gift-date">${new Date(gift.createdAt).toLocaleString()}</p>` : ''}
+                </div>
+            </div>
+            <div class="gift-actions">
+                <button class="gift-accept-button" data-gift-id="${gift.id}">Mark as Collected</button>
+                <button class="gift-reject-button" data-gift-id="${gift.id}">Reject</button>
+            </div>
+        `;
+        giftsList.appendChild(item);
+    });
+
+    giftsList.querySelectorAll('.gift-accept-button').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const giftId = e.target.getAttribute('data-gift-id');
+            await handleAcceptGift(giftId);
+        });
+    });
+
+    giftsList.querySelectorAll('.gift-reject-button').forEach(btn => {
+        btn.addEventListener('click', async (e) => {
+            const giftId = e.target.getAttribute('data-gift-id');
+            await handleRejectGift(giftId);
+        });
+    });
+}
+
+async function handleAcceptGift(giftId) {
+    try {
+        const response = await fetch(`/api/gifts/${encodeURIComponent(giftId)}/accept`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            console.error('Failed to accept gift:', response.status);
+            alert('Unable to accept gift. Please try again.');
+            return;
+        }
+        const data = await response.json();
+        if (data.collection) {
+            collectionCache = data.collection;
+        }
+        pendingGifts = pendingGifts.filter(g => g.id !== giftId);
+        renderPendingGifts();
+        // Re-render cards and stats with updated collection
+        rerenderCards();
+        updateStats(filteredCards);
+    } catch (error) {
+        console.error('Error accepting gift:', error);
+        alert('Unable to accept gift. Please try again.');
+    }
+}
+
+async function handleRejectGift(giftId) {
+    try {
+        const response = await fetch(`/api/gifts/${encodeURIComponent(giftId)}/reject`, {
+            method: 'POST',
+            credentials: 'include'
+        });
+        if (!response.ok) {
+            console.error('Failed to reject gift:', response.status);
+            alert('Unable to reject gift. Please try again.');
+            return;
+        }
+        pendingGifts = pendingGifts.filter(g => g.id !== giftId);
+        renderPendingGifts();
+    } catch (error) {
+        console.error('Error rejecting gift:', error);
+        alert('Unable to reject gift. Please try again.');
     }
 }
 
@@ -423,11 +585,11 @@ function createCardElement(card) {
         } else if (isBoughtStatus) {
             // Bought: show un-buy button and collect button
             boughtButton = `<button class="bought-button bought" onclick="handleBought(event, '${card.id}')">📦 Bought</button>`;
-            collectButton = `<button class="collect-button not-collected" onclick="handleCollect(event, '${card.id}')">Not Collected</button>`;
+            collectButton = `<button class="collect-button not-collected" onclick="handleCollect(event, '${card.id}')">Mark as Collected</button>`;
         } else {
             // Not collected: show both buy and collect buttons
             boughtButton = `<button class="bought-button not-bought" onclick="handleBought(event, '${card.id}')">Mark as Bought</button>`;
-            collectButton = `<button class="collect-button not-collected" onclick="handleCollect(event, '${card.id}')">Not Collected</button>`;
+            collectButton = `<button class="collect-button not-collected" onclick="handleCollect(event, '${card.id}')">Mark as Collected</button>`;
         }
     } else {
         // Not authenticated: show status only, no edit buttons
@@ -456,11 +618,73 @@ function createCardElement(card) {
             <div class="action-buttons">
                 ${boughtButton}
                 ${collectButton}
+                <button class="gift-button" onclick="handleGiftClick(event, '${card.id}')">Gift this card</button>
             </div>
         </div>
     `;
     
     return cardDiv;
+}
+
+// Show gift modal to let someone enter their name
+function showGiftModal(cardId) {
+    let modal = document.getElementById('gift-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'gift-modal';
+        modal.className = 'gift-modal-overlay';
+        modal.innerHTML = `
+            <div class="gift-modal">
+                <h3>Gift this card</h3>
+                <p>Enter the name of the person who is gifting this card.</p>
+                <input type="text" id="gift-giver-name" class="gift-input" placeholder="Your name">
+                <div class="gift-modal-actions">
+                    <button id="gift-cancel-button" class="gift-cancel-button">Cancel</button>
+                    <button id="gift-confirm-button" class="gift-confirm-button">Send Gift</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    modal.style.display = 'flex';
+
+    const nameInput = document.getElementById('gift-giver-name');
+    const cancelBtn = document.getElementById('gift-cancel-button');
+    const confirmBtn = document.getElementById('gift-confirm-button');
+
+    if (nameInput) {
+        nameInput.value = '';
+        nameInput.focus();
+    }
+
+    const closeModal = () => {
+        modal.style.display = 'none';
+    };
+
+    cancelBtn.onclick = () => {
+        closeModal();
+    };
+
+    confirmBtn.onclick = async () => {
+        const giverName = nameInput ? nameInput.value.trim() : '';
+        if (!giverName) {
+            alert('Please enter a name.');
+            return;
+        }
+        try {
+            await createGift(cardId, giverName);
+            alert('Thank you! Your gift has been recorded and will appear for confirmation.');
+            closeModal();
+        } catch {
+            // Error handled in createGift
+        }
+    };
+}
+
+function handleGiftClick(event, cardId) {
+    event.stopPropagation();
+    showGiftModal(cardId);
 }
 
 // Handle collect button click
@@ -631,6 +855,11 @@ async function init() {
         
         // Render initial cards
         renderCards(filteredCards);
+
+        // Load pending gifts (if authenticated)
+        if (isAuthenticated) {
+            await loadPendingGifts();
+        }
         
     } catch (error) {
         console.error('Error initializing:', error);
@@ -641,6 +870,8 @@ async function init() {
 // Make handlers available globally
 window.handleCollect = handleCollect;
 window.handleBought = handleBought;
+window.handleGiftClick = handleGiftClick;
+window.showGiftModal = showGiftModal;
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);
