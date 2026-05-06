@@ -2,7 +2,7 @@ version: '3.8'
 
 services:
   forest-tracker:
-    image: ghcr.io/${GITHUB_OWNER:-armel}/forest-collection-tracker:latest
+    image: ghcr.io/armaDio/forest-collection-tracker:latest
     container_name: forest-tracker
     restart: unless-stopped
     labels:

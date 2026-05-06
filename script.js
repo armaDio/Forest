@@ -577,6 +577,9 @@ function createCardElement(card) {
     // Determine which buttons to show based on state (only if authenticated)
     let boughtButton = '';
     let collectButton = '';
+    const giftButton = !isBoughtStatus
+        ? `<button class="gift-button" onclick="handleGiftClick(event, '${card.id}')">Gift this card</button>`
+        : '';
     
     if (isAuthenticated) {
         if (isCollectedStatus) {
@@ -618,7 +621,7 @@ function createCardElement(card) {
             <div class="action-buttons">
                 ${boughtButton}
                 ${collectButton}
-                <button class="gift-button" onclick="handleGiftClick(event, '${card.id}')">Gift this card</button>
+                ${giftButton}
             </div>
         </div>
     `;

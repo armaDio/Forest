@@ -403,7 +403,7 @@ function createDetailView(card) {
                         isBoughtStatus ? `<div class="status-display bought-status">📦 Bought</div>` :
                         `<div class="status-display not-collected-status">Not Collected</div>`
                     )}
-                    <button class="detail-gift-button" onclick="showGiftModal('${card.id}')">Gift this card</button>
+                    ${!isBoughtStatus ? `<button class="detail-gift-button" onclick="showGiftModal('${card.id}')">Gift this card</button>` : ''}
                 </div>
             </div>
         </div>
