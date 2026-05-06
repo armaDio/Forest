@@ -5,6 +5,7 @@ const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
 const fetch = require('node-fetch');
+require('dotenv').config({ quiet: true });
 
 const app = express();
 const PORT = process.env.PORT || 3000;
@@ -221,6 +222,9 @@ app.post('/api/cardtrader/overrides', requireAuth, async (req, res) => {
 // --- Authentication ---
 app.post('/api/login', async (req, res) => {
     const { username, password } = req.body;
+    if (!AUTH_USERNAME || !AUTH_PASSWORD_HASH) {
+        return res.status(500).json({ error: 'Server auth is not configured' });
+    }
     if (username === AUTH_USERNAME) {
         let isValid = false;
         if (AUTH_PASSWORD_HASH.startsWith('$2b$') || AUTH_PASSWORD_HASH.startsWith('$2a$')) {

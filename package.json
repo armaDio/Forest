@@ -12,10 +12,11 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "express": "^4.18.2",
+    "bcrypt": "^5.1.1",
     "cors": "^2.8.5",
-    "express-session": "^1.17.3",
-    "bcrypt": "^5.1.1"
+    "dotenv": "^17.4.2",
+    "express": "^4.18.2",
+    "express-session": "^1.17.3"
   },
   "devDependencies": {
     "jest": "^29.7.0",
