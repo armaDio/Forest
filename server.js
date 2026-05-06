@@ -14,8 +14,8 @@ const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 
 // Authentication credentials
-const AUTH_USERNAME = process.env.AUTH_USERNAME || 'armaDio';
-const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH || 'REDACTED'; // Plain text default (insecure!)
+const AUTH_USERNAME = process.env.AUTH_USERNAME;
+const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH; // Plain text default (insecure!)
 
 // File paths
 const COLLECTION_FILE = path.join(DATA_DIR, 'collection.json');
