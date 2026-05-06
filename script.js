@@ -9,6 +9,15 @@ let dataLoaded = false;
 let isAuthenticated = false;
 let pendingGifts = [];
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Fetch all Forest cards from Scryfall API
 async function fetchAllForests() {
     const allCards = [];
@@ -266,13 +275,15 @@ function renderPendingGifts() {
         const card = allCards.find(c => c.id === gift.cardId);
         const setName = card?.set_name || '';
         const collectorNumber = card?.collector_number || '';
+        const safeGiverName = escapeHtml(gift.giverName || '');
+        const safeCardName = card ? escapeHtml(card.name || '') : '';
         const item = document.createElement('div');
         item.className = 'gift-item';
         item.innerHTML = `
             <div class="gift-card-info">
-                ${card ? `<img src="${card.image_uris?.small || card.image_uris?.normal || ''}" alt="${card.name}" class="gift-card-image">` : ''}
+                ${card ? `<img src="${card.image_uris?.small || card.image_uris?.normal || ''}" alt="${safeCardName}" class="gift-card-image">` : ''}
                 <div class="gift-text">
-                    <p><strong>${gift.giverName}</strong> gifted you ${card ? `"${card.name}"` : 'a card'}.</p>
+                    <p><strong>${safeGiverName}</strong> gifted you ${card ? `"${safeCardName}"` : 'a card'}.</p>
                     ${card ? `<p class="gift-meta">${setName}${collectorNumber ? ` · #${collectorNumber}` : ''}</p>` : ''}
                     ${gift.createdAt ? `<p class="gift-date">${new Date(gift.createdAt).toLocaleString()}</p>` : ''}
                 </div>

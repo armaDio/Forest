@@ -8,6 +8,7 @@ const fetch = require('node-fetch');
 
 const app = express();
 const PORT = process.env.PORT || 3000;
+const IS_PRODUCTION = process.env.NODE_ENV === 'production';
 
 // Base data directory (overridable for tests)
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -28,11 +29,19 @@ const GIFTS_FILE = path.join(DATA_DIR, 'gifts.json');
 // --- Middleware ---
 app.use(cors({ origin: true, credentials: true }));
 app.use(express.json());
+if (IS_PRODUCTION) {
+    app.set('trust proxy', 1);
+}
 app.use(session({
     secret: process.env.SESSION_SECRET || 'your-secret-key-change-this-in-production',
     resave: false,
     saveUninitialized: false,
-    cookie: { secure: false, httpOnly: true, maxAge: 24 * 60 * 60 * 1000 }
+    cookie: {
+        secure: IS_PRODUCTION,
+        httpOnly: true,
+        sameSite: 'lax',
+        maxAge: 24 * 60 * 60 * 1000
+    }
 }));
 app.use(express.static(__dirname));
 
@@ -217,7 +226,7 @@ app.post('/api/login', async (req, res) => {
         if (AUTH_PASSWORD_HASH.startsWith('$2b$') || AUTH_PASSWORD_HASH.startsWith('$2a$')) {
             try { isValid = await bcrypt.compare(password, AUTH_PASSWORD_HASH); } catch { isValid = false; }
         } else {
-            isValid = password === AUTH_PASSWORD_HASH || password === 'password';
+            isValid = password === AUTH_PASSWORD_HASH;
         }
         if (isValid) {
             req.session.authenticated = true;

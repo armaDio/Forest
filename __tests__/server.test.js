@@ -37,6 +37,13 @@ describe('API routes', () => {
             expect(res.status).toBe(401);
         });
 
+        test('does not allow fallback magic password', async () => {
+            const res = await agent
+                .post('/api/login')
+                .send({ username: 'testuser', password: 'password' });
+            expect(res.status).toBe(401);
+        });
+
         test('accepts valid login and sets session', async () => {
             const res = await agent
                 .post('/api/login')

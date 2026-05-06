@@ -9,6 +9,15 @@ let dataLoaded = false;
 let isAuthenticated = false;
 let currentGiftInfo = null;
 
+function escapeHtml(value) {
+    return String(value)
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;')
+        .replace(/"/g, '&quot;')
+        .replace(/'/g, '&#39;');
+}
+
 // Get card ID from URL
 function getCardIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -358,7 +367,7 @@ function createDetailView(card) {
     const giftSection = currentGiftInfo
         ? `<div class="detail-section">
                 <h3>Gift</h3>
-                <p><strong>Gifted by:</strong> ${currentGiftInfo.giverName}</p>
+                <p><strong>Gifted by:</strong> ${escapeHtml(currentGiftInfo.giverName || '')}</p>
            </div>`
         : '';
 

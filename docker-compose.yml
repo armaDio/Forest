@@ -1,20 +1,23 @@
-version: '3.8'
-
 services:
   forest-tracker:
-    image: ghcr.io/armaDio/forest-collection-tracker:latest
+    image: ${IMAGE_REPO:-ghcr.io/armaDio/forest-collection-tracker}:${IMAGE_TAG:-latest}
     container_name: forest-tracker
     restart: unless-stopped
+    env_file:
+      - .env
     labels:
       - com.centurylinklabs.watchtower.enable=true
     ports:
-      - "3000:3000"
+      - "${APP_PORT:-3000}:3000"
     volumes:
       # Persist data directory
       - ./data:/app/data
     environment:
-      - PORT=3000
-      - NODE_ENV=production
+      - PORT=${PORT:-3000}
+      - NODE_ENV=${NODE_ENV:-production}
+      - AUTH_USERNAME=${AUTH_USERNAME}
+      - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH}
+      - SESSION_SECRET=${SESSION_SECRET}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (res) => process.exit(res.statusCode >= 200 && res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s
@@ -28,4 +31,4 @@ services:
     restart: unless-stopped
     volumes:
       - /var/run/docker.sock:/var/run/docker.sock
-    command: --interval 300 --cleanup --label-enable forest-tracker
+    command: --interval ${WATCHTOWER_INTERVAL:-300} --cleanup --label-enable forest-tracker
