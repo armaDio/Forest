@@ -1,0 +1,31 @@
+version: '3.8'
+
+services:
+  forest-tracker:
+    image: ghcr.io/${GITHUB_OWNER:-armel}/forest-collection-tracker:latest
+    container_name: forest-tracker
+    restart: unless-stopped
+    labels:
+      - com.centurylinklabs.watchtower.enable=true
+    ports:
+      - "3000:3000"
+    volumes:
+      # Persist data directory
+      - ./data:/app/data
+    environment:
+      - PORT=3000
+      - NODE_ENV=production
+    healthcheck:
+      test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (res) => process.exit(res.statusCode >= 200 && res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+  watchtower:
+    image: containrrr/watchtower:latest
+    container_name: forest-tracker-watchtower
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    command: --interval 300 --cleanup --label-enable forest-tracker

@@ -105,3 +105,26 @@ server {
 ```
 
 Then run the Node.js server on port 3000.
+
+## TrueNAS Manual App (Auto-update from GitHub)
+
+This repo includes Docker automation so your TrueNAS app can always run the newest version:
+
+- A GitHub Actions workflow builds and publishes `ghcr.io/<owner>/forest-collection-tracker:latest` on each push to `main`.
+- `watchtower` is included in `docker-compose.yml` and checks every 5 minutes for a newer `latest` image.
+- When a new image is found, Watchtower pulls it and restarts `forest-tracker` automatically.
+
+### One-time setup
+
+1. Push this repo to GitHub.
+2. Ensure the default branch is `main` (or adjust `.github/workflows/docker-publish.yml`).
+3. Make the package visible to your TrueNAS host:
+   - Public package: no extra auth needed.
+   - Private package: configure Docker login to GHCR on the TrueNAS host.
+4. In your TrueNAS app compose path, use this file and set:
+   - `GITHUB_OWNER=<your-github-username-or-org>`
+
+### Notes
+
+- Your persistent app data remains in `./data` and is not replaced during updates.
+- You can force an immediate image check by restarting `watchtower`.

@@ -192,7 +192,8 @@ async function fetchGiftInfo(cardId) {
 // Fetch all Forest cards from Scryfall API (for binder position)
 async function fetchAllForests() {
     const allCards = [];
-    let url = 'https://api.scryfall.com/cards/search?q=Forest+(type:land+type:basic)+(game:paper)+unique:prints&order=released&unique=cards';
+    // Keep this query aligned with script.js so binder page numbers match everywhere.
+    let url = 'https://api.scryfall.com/cards/search?q=!Forest+(game:paper)+include:extras+unique:prints&unique=cards';
 
     while (url) {
         try {
