@@ -6,7 +6,7 @@ describe('Gift button visibility rules', () => {
         const scriptPath = path.join(__dirname, '..', 'script.js');
         const scriptContent = fs.readFileSync(scriptPath, 'utf8');
 
-        expect(scriptContent).toContain('const giftButton = !isBoughtStatus');
+        expect(scriptContent).toContain('const giftButton = !isBoughtStatus && !isCollectedStatus');
         expect(scriptContent).toContain("${giftButton}");
     });
 
@@ -14,6 +14,6 @@ describe('Gift button visibility rules', () => {
         const detailPath = path.join(__dirname, '..', 'detail.js');
         const detailContent = fs.readFileSync(detailPath, 'utf8');
 
-        expect(detailContent).toContain("${!isBoughtStatus ? `<button class=\"detail-gift-button\" onclick=\"showGiftModal('${card.id}')\">Gift this card</button>` : ''}");
+        expect(detailContent).toContain("${!isBoughtStatus && !isCollectedStatus ? `<button class=\"detail-gift-button\" onclick=\"showGiftModal('${card.id}')\">Gift this card</button>` : ''}");
     });
 });

@@ -18,6 +18,26 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function isCollectionCollected(entry) {
+    if (entry === true) return true;
+    if (entry && typeof entry === 'object' && entry.collected === true) return true;
+    return false;
+}
+
+function getCollectedGivenBy(entry) {
+    if (entry && typeof entry === 'object' && typeof entry.givenBy === 'string') {
+        const trimmed = entry.givenBy.trim();
+        return trimmed || null;
+    }
+    return null;
+}
+
+function makeCollectionCollectedValue(givenBy) {
+    const name = typeof givenBy === 'string' ? givenBy.trim() : '';
+    if (name) return { collected: true, givenBy: name };
+    return true;
+}
+
 // Get card ID from URL
 function getCardIdFromUrl() {
     const params = new URLSearchParams(window.location.search);
@@ -96,17 +116,9 @@ async function saveCollection(collection) {
     }
 }
 
-// Toggle card collection status
-async function toggleCollection(cardId) {
-    const collection = getCollection();
-    collection[cardId] = collection[cardId] === true ? false : true;
-    await saveCollection(collection);
-    return collection[cardId];
-}
-
-// Check if card is collected
+// Check if card is collected (supports legacy `true` and `{ collected: true, givenBy }`)
 function isCollected(cardId) {
-    return getCollection()[cardId] === true;
+    return isCollectionCollected(getCollection()[cardId]);
 }
 
 // Get bought cards from cache
@@ -360,14 +372,20 @@ function getPurchaseLinks(card) {
 function createDetailView(card) {
     const isCollectedStatus = isCollected(card.id);
     const isBoughtStatus = isBought(card.id);
+    const collectedGivenBy = getCollectedGivenBy(getCollection()[card.id]);
+    const giftGiverName = (currentGiftInfo && String(currentGiftInfo.giverName || '').trim()) || null;
+    // Same giver whether they used "Received from" when collecting or the gift flow; only when collected.
+    const rawGiver = isCollectedStatus ? (collectedGivenBy || giftGiverName) : null;
+    const receivedFromName = rawGiver && String(rawGiver).trim() ? String(rawGiver).trim() : null;
     const binderPos = getBinderPosition(card.id);
     const binderInfo = binderPos ? `Page ${binderPos.page}, Slot ${binderPos.slot} (Row ${binderPos.row}, Column ${binderPos.column})` : 'N/A';
     const container = document.getElementById('detail-container');
 
-    const giftSection = currentGiftInfo
+    const collectionMetaSection = receivedFromName
         ? `<div class="detail-section">
-                <h3>Gift</h3>
-                <p><strong>Gifted by:</strong> ${escapeHtml(currentGiftInfo.giverName || '')}</p>
+                <h3>Collection</h3>
+                <p><strong>Status:</strong> Collected</p>
+                <p><strong>Received from:</strong> ${escapeHtml(receivedFromName)}</p>
            </div>`
         : '';
 
@@ -399,7 +417,7 @@ function createDetailView(card) {
                 </div>
                 ${card.prices ? `<div class="detail-section"><h3>Pricing</h3>${card.prices.usd ? `<p><strong>USD:</strong> ${formatPrice(card.prices.usd)}</p>` : ''}${card.prices.usd_foil ? `<p><strong>USD Foil:</strong> ${formatPrice(card.prices.usd_foil)}</p>` : ''}${card.prices.eur ? `<p><strong>EUR:</strong> €${parseFloat(card.prices.eur).toFixed(2)}</p>` : ''}${card.prices.eur_foil ? `<p><strong>EUR Foil:</strong> €${parseFloat(card.prices.eur_foil).toFixed(2)}</p>` : ''}</div>` : ''}
                 ${card.legalities ? `<div class="detail-section"><h3>Legalities</h3><p><strong>Standard:</strong> ${card.legalities.standard || 'N/A'}</p><p><strong>Modern:</strong> ${card.legalities.modern || 'N/A'}</p><p><strong>Legacy:</strong> ${card.legalities.legacy || 'N/A'}</p><p><strong>Commander:</strong> ${card.legalities.commander || 'N/A'}</p></div>` : ''}
-                ${giftSection}
+                ${collectionMetaSection}
                 ${!isCollectedStatus ? `<div class="detail-section"><h3>Purchase</h3>${getPurchaseLinks(card)}</div>` : ''}
                 ${isBoughtStatus && !isCollectedStatus ? `<div class="detail-section bought-status-section"><h3>📦 Status</h3><p><strong>This card has been purchased and is awaiting delivery.</strong></p></div>` : ''}
                 <div class="detail-action-buttons">
@@ -412,7 +430,7 @@ function createDetailView(card) {
                         isBoughtStatus ? `<div class="status-display bought-status">📦 Bought</div>` :
                         `<div class="status-display not-collected-status">Not Collected</div>`
                     )}
-                    ${!isBoughtStatus ? `<button class="detail-gift-button" onclick="showGiftModal('${card.id}')">Gift this card</button>` : ''}
+                    ${!isBoughtStatus && !isCollectedStatus ? `<button class="detail-gift-button" onclick="showGiftModal('${card.id}')">Gift this card</button>` : ''}
                 </div>
             </div>
         </div>
@@ -485,16 +503,80 @@ function showGiftModal(cardId) {
     };
 }
 
+function showCollectGivenModal(onConfirm) {
+    let modal = document.getElementById('collect-given-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'collect-given-modal';
+        modal.className = 'gift-modal-overlay';
+        modal.innerHTML = `
+            <div class="gift-modal">
+                <h3>Mark as collected</h3>
+                <p>If someone gave you this card, enter their name (optional).</p>
+                <input type="text" id="collect-given-input" class="gift-input" placeholder="Received from">
+                <div class="gift-modal-actions">
+                    <button type="button" id="collect-given-cancel" class="gift-cancel-button">Cancel</button>
+                    <button type="button" id="collect-given-save" class="gift-confirm-button">Mark collected</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const input = document.getElementById('collect-given-input');
+    const cancelBtn = document.getElementById('collect-given-cancel');
+    const saveBtn = document.getElementById('collect-given-save');
+
+    const close = () => {
+        modal.style.display = 'none';
+    };
+
+    input.value = '';
+    modal.style.display = 'flex';
+    input.focus();
+
+    cancelBtn.onclick = () => close();
+    saveBtn.onclick = () => {
+        const name = input ? input.value.trim() : '';
+        close();
+        onConfirm(name);
+    };
+}
+
 // Handle collect button click
 async function handleCollect(cardId) {
-    if (!isAuthenticated) { window.location.href = '/login.html'; return; }
-    const isNowCollected = await toggleCollection(cardId);
-    if (isNowCollected) { const bought = getBought(); if (bought[cardId]) { bought[cardId] = false; await saveBought(bought); } }
-    const card = allCards.find(c => c.id === cardId);
-    if (card) {
-        currentGiftInfo = await fetchGiftInfo(cardId);
-        createDetailView(card);
+    if (!isAuthenticated) {
+        window.location.href = '/login.html';
+        return;
     }
+
+    const card = allCards.find(c => c.id === cardId);
+
+    if (isCollected(cardId)) {
+        const collection = getCollection();
+        collection[cardId] = false;
+        await saveCollection(collection);
+        if (card) {
+            currentGiftInfo = await fetchGiftInfo(cardId);
+            createDetailView(card);
+        }
+        return;
+    }
+
+    showCollectGivenModal(async (givenByName) => {
+        const collection = getCollection();
+        collection[cardId] = makeCollectionCollectedValue(givenByName);
+        await saveCollection(collection);
+        const bought = getBought();
+        if (bought[cardId]) {
+            bought[cardId] = false;
+            await saveBought(bought);
+        }
+        if (card) {
+            currentGiftInfo = await fetchGiftInfo(cardId);
+            createDetailView(card);
+        }
+    });
 }
 
 // Handle bought button click

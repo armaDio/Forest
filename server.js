@@ -61,6 +61,15 @@ async function writeDataFile(filePath, data) {
     await fs.writeFile(filePath, JSON.stringify(data, null, 2), 'utf8');
 }
 
+/** Optional giver name stored on a collected card (same meaning as accepted gift giver). */
+function givenByFromCollectionEntry(entry) {
+    if (entry && typeof entry === 'object' && typeof entry.givenBy === 'string') {
+        const t = entry.givenBy.trim();
+        return t || null;
+    }
+    return null;
+}
+
 async function getCardtraderToken() {
     try {
         const token = await fs.readFile(CARDTRADER_TOKEN_FILE, 'utf8');
@@ -322,7 +331,7 @@ app.post('/api/gifts/:id/accept', requireAuth, async (req, res) => {
         gift.processedAt = new Date().toISOString();
 
         const collection = await readDataFile(COLLECTION_FILE);
-        collection[gift.cardId] = true;
+        collection[gift.cardId] = { collected: true, givenBy: gift.giverName };
 
         await Promise.all([
             writeGifts(gifts),
@@ -360,25 +369,34 @@ app.post('/api/gifts/:id/reject', requireAuth, async (req, res) => {
     }
 });
 
-// Public endpoint: get accepted gift info for a specific card
+// Public endpoint: giver name for a card (accepted gift and/or "Received from" on collection)
 app.get('/api/gifts/card/:cardId', async (req, res) => {
     try {
         const cardId = req.params.cardId;
+        const collection = await readDataFile(COLLECTION_FILE);
+        const fromCollection = givenByFromCollectionEntry(collection[cardId]);
+
         const gifts = await readGifts();
         const accepted = gifts.filter(g => g.cardId === cardId && g.status === 'accepted');
-        if (accepted.length === 0) {
-            return res.json({ gift: null });
-        }
         accepted.sort((a, b) => {
             const da = new Date(a.processedAt || a.createdAt || 0).getTime();
             const db = new Date(b.processedAt || b.createdAt || 0).getTime();
             return db - da;
         });
         const latest = accepted[0];
+        const fromGift = latest?.giverName && String(latest.giverName).trim()
+            ? String(latest.giverName).trim()
+            : null;
+
+        const giverName = fromCollection || fromGift;
+        if (!giverName) {
+            return res.json({ gift: null });
+        }
+
         res.json({
             gift: {
-                giverName: latest.giverName,
-                processedAt: latest.processedAt || latest.createdAt
+                giverName,
+                processedAt: latest ? (latest.processedAt || latest.createdAt) : null
             }
         });
     } catch (err) {

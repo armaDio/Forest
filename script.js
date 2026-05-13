@@ -18,6 +18,26 @@ function escapeHtml(value) {
         .replace(/'/g, '&#39;');
 }
 
+function isCollectionCollected(entry) {
+    if (entry === true) return true;
+    if (entry && typeof entry === 'object' && entry.collected === true) return true;
+    return false;
+}
+
+function getCollectedGivenBy(entry) {
+    if (entry && typeof entry === 'object' && typeof entry.givenBy === 'string') {
+        const trimmed = entry.givenBy.trim();
+        return trimmed || null;
+    }
+    return null;
+}
+
+function makeCollectionCollectedValue(givenBy) {
+    const name = typeof givenBy === 'string' ? givenBy.trim() : '';
+    if (name) return { collected: true, givenBy: name };
+    return true;
+}
+
 // Fetch all Forest cards from Scryfall API
 async function fetchAllForests() {
     const allCards = [];
@@ -394,20 +414,9 @@ async function saveCollection(collection) {
     }
 }
 
-// Toggle card collection status
-async function toggleCollection(cardId) {
-    const collection = getCollection();
-    // Explicitly handle undefined/false/true states
-    collection[cardId] = collection[cardId] === true ? false : true;
-    await saveCollection(collection);
-    return collection[cardId];
-}
-
-// Check if card is collected
+// Check if card is collected (supports legacy `true` and `{ collected: true, givenBy }`)
 function isCollected(cardId) {
-    const collection = getCollection();
-    // Explicitly check for true value
-    return collection[cardId] === true;
+    return isCollectionCollected(getCollection()[cardId]);
 }
 
 // Get bought cards from cache
@@ -588,7 +597,7 @@ function createCardElement(card) {
     // Determine which buttons to show based on state (only if authenticated)
     let boughtButton = '';
     let collectButton = '';
-    const giftButton = !isBoughtStatus
+    const giftButton = !isBoughtStatus && !isCollectedStatus
         ? `<button class="gift-button" onclick="handleGiftClick(event, '${card.id}')">Gift this card</button>`
         : '';
     
@@ -701,30 +710,85 @@ function handleGiftClick(event, cardId) {
     showGiftModal(cardId);
 }
 
+// Modal when marking a card collected (optional "received from" name)
+function showCollectGivenModal(onConfirm) {
+    let modal = document.getElementById('collect-given-modal');
+    if (!modal) {
+        modal = document.createElement('div');
+        modal.id = 'collect-given-modal';
+        modal.className = 'gift-modal-overlay';
+        modal.innerHTML = `
+            <div class="gift-modal">
+                <h3>Mark as collected</h3>
+                <p>If someone gave you this card, enter their name (optional).</p>
+                <input type="text" id="collect-given-input" class="gift-input" placeholder="Received from">
+                <div class="gift-modal-actions">
+                    <button type="button" id="collect-given-cancel" class="gift-cancel-button">Cancel</button>
+                    <button type="button" id="collect-given-save" class="gift-confirm-button">Mark collected</button>
+                </div>
+            </div>
+        `;
+        document.body.appendChild(modal);
+    }
+
+    const input = document.getElementById('collect-given-input');
+    const cancelBtn = document.getElementById('collect-given-cancel');
+    const saveBtn = document.getElementById('collect-given-save');
+
+    const close = () => {
+        modal.style.display = 'none';
+    };
+
+    input.value = '';
+    modal.style.display = 'flex';
+    input.focus();
+
+    cancelBtn.onclick = () => close();
+    saveBtn.onclick = () => {
+        const name = input ? input.value.trim() : '';
+        close();
+        onConfirm(name);
+    };
+}
+
 // Handle collect button click
 async function handleCollect(event, cardId) {
     event.stopPropagation();
-    
-    // Check authentication before allowing edit
+
     if (!isAuthenticated) {
         window.location.href = '/login.html';
         return;
     }
-    
+
     const cardItem = event.target.closest('.card-item');
-    
-    // Toggle collection status
-    const isNowCollected = await toggleCollection(cardId);
-    
-    // Re-render the card with updated buttons
-    const card = allCards.find(c => c.id === cardId);
-    if (card) {
-        const newCardElement = createCardElement(card);
-        cardItem.parentNode.replaceChild(newCardElement, cardItem);
+
+    if (isCollected(cardId)) {
+        const collection = getCollection();
+        collection[cardId] = false;
+        await saveCollection(collection);
+        const card = allCards.find(c => c.id === cardId);
+        if (card && cardItem && cardItem.parentNode) {
+            cardItem.parentNode.replaceChild(createCardElement(card), cardItem);
+        }
+        updateStats(filteredCards);
+        return;
     }
-    
-    // Update stats with current filtered cards
-    updateStats(filteredCards);
+
+    showCollectGivenModal(async (givenByName) => {
+        const collection = getCollection();
+        collection[cardId] = makeCollectionCollectedValue(givenByName);
+        await saveCollection(collection);
+        const bought = getBought();
+        if (bought[cardId]) {
+            bought[cardId] = false;
+            await saveBought(bought);
+        }
+        const card = allCards.find(c => c.id === cardId);
+        if (card && cardItem && cardItem.parentNode) {
+            cardItem.parentNode.replaceChild(createCardElement(card), cardItem);
+        }
+        updateStats(filteredCards);
+    });
 }
 
 // Handle bought button click

@@ -132,7 +132,7 @@ describe('API routes', () => {
             expect(acceptRes.status).toBe(200);
             expect(acceptRes.body.success).toBe(true);
             expect(acceptRes.body.gift.status).toBe('accepted');
-            expect(acceptRes.body.collection[sampleCardId]).toBe(true);
+            expect(acceptRes.body.collection[sampleCardId]).toEqual({ collected: true, givenBy: 'Alice' });
 
             const cardGiftRes = await request(app).get(`/api/gifts/card/${sampleCardId}`);
             expect(cardGiftRes.status).toBe(200);
@@ -160,6 +160,35 @@ describe('API routes', () => {
             const res = await request(app).get('/api/gifts/card/non-existent-card');
             expect(res.status).toBe(200);
             expect(res.body.gift).toBeNull();
+        });
+
+        test('card gift endpoint returns giver from collection givenBy when no accepted gift', async () => {
+            const cardId = 'orchid-only-collection';
+            const saveRes = await agent
+                .post('/api/collection')
+                .send({ [cardId]: { collected: true, givenBy: 'River' } });
+            expect(saveRes.status).toBe(200);
+
+            const res = await request(app).get(`/api/gifts/card/${encodeURIComponent(cardId)}`);
+            expect(res.status).toBe(200);
+            expect(res.body.gift).toBeTruthy();
+            expect(res.body.gift.giverName).toBe('River');
+        });
+
+        test('card gift endpoint prefers collection givenBy over accepted gift', async () => {
+            const cardId = 'dual-source-card';
+            await request(app).post('/api/gifts').send({ cardId, giverName: 'GiftPerson' });
+            const giftsRes = await agent.get('/api/gifts/pending');
+            const gifts = giftsRes.body;
+            const giftId = gifts.find(g => g.cardId === cardId).id;
+            await agent.post(`/api/gifts/${giftId}/accept`);
+            await agent
+                .post('/api/collection')
+                .send({ [cardId]: { collected: true, givenBy: 'ManualPerson' } });
+
+            const res = await request(app).get(`/api/gifts/card/${encodeURIComponent(cardId)}`);
+            expect(res.status).toBe(200);
+            expect(res.body.gift.giverName).toBe('ManualPerson');
         });
     });
 });
