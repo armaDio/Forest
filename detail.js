@@ -381,11 +381,16 @@ function createDetailView(card) {
     const binderInfo = binderPos ? `Page ${binderPos.page}, Slot ${binderPos.slot} (Row ${binderPos.row}, Column ${binderPos.column})` : 'N/A';
     const container = document.getElementById('detail-container');
 
-    const collectionMetaSection = receivedFromName
+    const collectionMetaSection = isCollectedStatus
         ? `<div class="detail-section">
                 <h3>Collection</h3>
                 <p><strong>Status:</strong> Collected</p>
-                <p><strong>Received from:</strong> ${escapeHtml(receivedFromName)}</p>
+                ${receivedFromName
+                    ? `<p><strong>Received from:</strong> ${escapeHtml(receivedFromName)}</p>`
+                    : '<p><em>No gifter name saved for this card yet.</em></p>'}
+                ${isAuthenticated
+                    ? `<p><button type="button" class="detail-gifter-button" onclick="handleSetCollectedGifter('${card.id}')">${receivedFromName ? 'Edit who gave this' : 'Add who gave this'}</button></p>`
+                    : ''}
            </div>`
         : '';
 
@@ -503,7 +508,12 @@ function showGiftModal(cardId) {
     };
 }
 
-function showCollectGivenModal(onConfirm) {
+function showCollectGivenModal(onConfirm, options = {}) {
+    const title = options.title ?? 'Mark as collected';
+    const subtitle = options.subtitle ?? 'If someone gave you this card, enter their name (optional).';
+    const confirmLabel = options.confirmLabel ?? 'Mark collected';
+    const initialValue = options.initialValue ?? '';
+
     let modal = document.getElementById('collect-given-modal');
     if (!modal) {
         modal = document.createElement('div');
@@ -511,8 +521,8 @@ function showCollectGivenModal(onConfirm) {
         modal.className = 'gift-modal-overlay';
         modal.innerHTML = `
             <div class="gift-modal">
-                <h3>Mark as collected</h3>
-                <p>If someone gave you this card, enter their name (optional).</p>
+                <h3 id="collect-given-title">Mark as collected</h3>
+                <p id="collect-given-subtitle">If someone gave you this card, enter their name (optional).</p>
                 <input type="text" id="collect-given-input" class="gift-input" placeholder="Received from">
                 <div class="gift-modal-actions">
                     <button type="button" id="collect-given-cancel" class="gift-cancel-button">Cancel</button>
@@ -523,6 +533,8 @@ function showCollectGivenModal(onConfirm) {
         document.body.appendChild(modal);
     }
 
+    const titleEl = document.getElementById('collect-given-title');
+    const subtitleEl = document.getElementById('collect-given-subtitle');
     const input = document.getElementById('collect-given-input');
     const cancelBtn = document.getElementById('collect-given-cancel');
     const saveBtn = document.getElementById('collect-given-save');
@@ -531,9 +543,12 @@ function showCollectGivenModal(onConfirm) {
         modal.style.display = 'none';
     };
 
-    input.value = '';
+    if (titleEl) titleEl.textContent = title;
+    if (subtitleEl) subtitleEl.textContent = subtitle;
+    if (saveBtn) saveBtn.textContent = confirmLabel;
+    if (input) input.value = initialValue;
     modal.style.display = 'flex';
-    input.focus();
+    if (input) input.focus();
 
     cancelBtn.onclick = () => close();
     saveBtn.onclick = () => {
@@ -541,6 +556,38 @@ function showCollectGivenModal(onConfirm) {
         close();
         onConfirm(name);
     };
+}
+
+function handleSetCollectedGifter(cardId) {
+    if (!isAuthenticated) {
+        window.location.href = '/login.html';
+        return;
+    }
+    const entry = getCollection()[cardId];
+    const fromCollection = getCollectedGivenBy(entry) || '';
+    const fromGift =
+        currentGiftInfo && String(currentGiftInfo.giverName || '').trim()
+            ? String(currentGiftInfo.giverName).trim()
+            : '';
+    const initial = fromCollection || fromGift;
+    showCollectGivenModal(
+        async (givenByName) => {
+            const collection = getCollection();
+            collection[cardId] = makeCollectionCollectedValue(givenByName);
+            await saveCollection(collection);
+            const card = allCards.find(c => c.id === cardId);
+            if (card) {
+                currentGiftInfo = await fetchGiftInfo(cardId);
+                createDetailView(card);
+            }
+        },
+        {
+            title: 'Who gave you this card?',
+            subtitle: 'Optional. Leave blank to clear the name while keeping the card marked collected.',
+            confirmLabel: 'Save',
+            initialValue: initial
+        }
+    );
 }
 
 // Handle collect button click
@@ -637,6 +684,7 @@ window.handleBought = handleBought;
 window.handleCardtraderClick = handleCardtraderClick;
 window.showCardtraderOverrideModal = showCardtraderOverrideModal;
 window.showGiftModal = showGiftModal;
+window.handleSetCollectedGifter = handleSetCollectedGifter;
 
 // Initialize when page loads
 document.addEventListener('DOMContentLoaded', init);
