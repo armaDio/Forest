@@ -8,6 +8,35 @@ let cardtraderOverrides = {}; // Store per-card expansion code overrides
 let dataLoaded = false;
 let isAuthenticated = false;
 let currentGiftInfo = null;
+let currentDetailCard = null;
+let currentDetailFaceOrder = [];
+let currentDetailFacePosition = 0;
+
+let appConfig = {
+    appTitle: 'Forest Collection Tracker',
+    scryfallQuery: '!Forest+(game:paper)+include:extras+unique:prints',
+    detailFlipEnabled: true,
+    detailFlipHint: '↔ Click to flip'
+};
+
+async function fetchAppConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const data = await response.json();
+            appConfig = { ...appConfig, ...data };
+        }
+    } catch (error) {
+        console.warn('Unable to load app config:', error);
+    }
+}
+
+function applyAppTitle() {
+    const appTitle = appConfig.appTitle || 'Forest Collection Tracker';
+    document.title = `Card Details - ${appTitle}`;
+    const header = document.querySelector('h1');
+    if (header) header.textContent = 'Card Details';
+}
 
 function escapeHtml(value) {
     return String(value)
@@ -16,6 +45,75 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function getCardImageUrl(card, preferredSizes = ['large', 'normal', 'small', 'png', 'art_crop', 'border_crop'], faceIndex = 0) {
+    if (!card) return '';
+
+    if (Array.isArray(card.card_faces) && card.card_faces[faceIndex] && card.card_faces[faceIndex].image_uris) {
+        const faceUris = card.card_faces[faceIndex].image_uris;
+        for (const size of preferredSizes) {
+            if (faceUris[size]) {
+                return faceUris[size];
+            }
+        }
+    }
+
+    const uris = card.image_uris;
+    if (uris) {
+        for (const size of preferredSizes) {
+            if (uris[size]) {
+                return uris[size];
+            }
+        }
+    }
+
+    if (Array.isArray(card.card_faces)) {
+        for (const face of card.card_faces) {
+            if (face.image_uris) {
+                for (const size of preferredSizes) {
+                    if (face.image_uris[size]) {
+                        return face.image_uris[size];
+                    }
+                }
+            }
+        }
+    }
+
+    return '';
+}
+
+function getCardFaceName(card, faceIndex = 0) {
+    if (Array.isArray(card.card_faces) && card.card_faces[faceIndex] && card.card_faces[faceIndex].name) {
+        return card.card_faces[faceIndex].name;
+    }
+    return card.name;
+}
+
+function getDetailFaceOrder(card) {
+    if (!Array.isArray(card.card_faces)) return [];
+    return card.card_faces
+        .map((face, index) => face.image_uris ? index : null)
+        .filter(index => index !== null);
+}
+
+function hasMultipleDetailFaces(card) {
+    return getDetailFaceOrder(card).length > 1;
+}
+
+function toggleDetailFace() {
+    if (!currentDetailCard || !currentDetailFaceOrder.length) return;
+    currentDetailFacePosition = (currentDetailFacePosition + 1) % currentDetailFaceOrder.length;
+    const faceIndex = currentDetailFaceOrder[currentDetailFacePosition];
+    const imageEl = document.getElementById('detail-card-image');
+    const imageHint = document.getElementById('detail-image-flip-hint');
+    if (imageEl) {
+        imageEl.src = getCardImageUrl(currentDetailCard, ['large', 'normal', 'small', 'png', 'art_crop', 'border_crop'], faceIndex);
+        imageEl.alt = getCardFaceName(currentDetailCard, faceIndex);
+    }
+    if (imageHint) {
+        imageHint.textContent = `↔ Click to flip (${getCardFaceName(currentDetailCard, faceIndex)})`;
+    }
 }
 
 function isCollectionCollected(entry) {
@@ -394,10 +492,20 @@ function createDetailView(card) {
            </div>`
         : '';
 
+    currentDetailCard = card;
+    currentDetailFaceOrder = getDetailFaceOrder(card);
+    currentDetailFacePosition = 0;
+    const currentFaceIndex = currentDetailFaceOrder.length ? currentDetailFaceOrder[currentDetailFacePosition] : 0;
+    const isFlippable = appConfig.detailFlipEnabled && hasMultipleDetailFaces(card);
+    const detailImageHint = isFlippable
+        ? `<div class="detail-image-flip-hint" id="detail-image-flip-hint">${appConfig.detailFlipHint}</div>`
+        : '';
+
     container.innerHTML = `
         <div class="detail-card">
-            <div class="detail-image-container">
-                <img src="${card.image_uris?.large || card.image_uris?.normal || ''}" alt="${card.name}" class="detail-image">
+            <div class="detail-image-container ${isFlippable ? 'clickable-detail-image' : ''}" ${isFlippable ? 'onclick="toggleDetailFace()"' : ''}>
+                <img id="detail-card-image" src="${getCardImageUrl(card, ['large', 'normal', 'small', 'png', 'art_crop', 'border_crop'], currentFaceIndex)}" alt="${getCardFaceName(card, currentFaceIndex)}" class="detail-image">
+                ${detailImageHint}
             </div>
             <div class="detail-info">
                 <h2 class="detail-title">${card.name}</h2>
@@ -659,6 +767,9 @@ async function init() {
     if (!cardId) { loadingDiv.innerHTML = '<p style="color: white;">No card ID provided.</p>'; return; }
 
     try {
+        await fetchAppConfig();
+        applyAppTitle();
+
         await checkAuth();
         if (isAuthenticated) await checkCardtraderAvailability();
         await loadData();

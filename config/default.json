@@ -1,0 +1,10 @@
+{
+  "appTitle": "Forest Collection Tracker",
+  "scryfallQuery": "!Forest+(game:paper)+include:extras+unique:prints",
+  "defaultSortByDate": true,
+  "skipDateSortWhenPlaneswalkerPresent": true,
+  "planeswalkerDisplayMode": "cardName",
+  "planeswalkerFilterEnabled": false,
+  "detailFlipEnabled": true,
+  "detailFlipHint": "↔ Click to flip"
+}

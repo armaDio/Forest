@@ -137,6 +137,21 @@
                 errorDiv.classList.add('show');
             }
         });
+
+        async function applyLoginTitle() {
+            try {
+                const response = await fetch('/api/config');
+                if (!response.ok) return;
+                const data = await response.json();
+                const titleText = data.appTitle || 'Forest Collection Tracker';
+                document.title = `Login - ${titleText}`;
+                const heading = document.querySelector('.login-container h1');
+                if (heading) heading.textContent = titleText;
+            } catch (err) {
+                console.warn('Unable to load app title config:', err);
+            }
+        }
+        applyLoginTitle();
     </script>
 </body>
 </html>

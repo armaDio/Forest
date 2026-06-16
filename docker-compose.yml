@@ -18,6 +18,8 @@ services:
       - AUTH_USERNAME=${AUTH_USERNAME}
       - AUTH_PASSWORD_HASH=${AUTH_PASSWORD_HASH}
       - SESSION_SECRET=${SESSION_SECRET}
+      - APP_TITLE=${APP_TITLE:-Forest Collection Tracker}
+      - SCRYFALL_QUERY=${SCRYFALL_QUERY:-!Forest+(game:paper)+include:extras+unique:prints&unique=cards'}
     healthcheck:
       test: ["CMD", "node", "-e", "require('http').get('http://localhost:3000', (res) => process.exit(res.statusCode >= 200 && res.statusCode < 500 ? 0 : 1)).on('error', () => process.exit(1))"]
       interval: 30s

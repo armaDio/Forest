@@ -18,6 +18,44 @@ const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
 const AUTH_USERNAME = process.env.AUTH_USERNAME;
 const AUTH_PASSWORD_HASH = process.env.AUTH_PASSWORD_HASH; // Plain text default (insecure!)
 
+const CONFIG_FILE = path.join(__dirname, 'config', 'default.json');
+let DEFAULT_CONFIG = {
+    appTitle: 'Forest Collection Tracker',
+    scryfallQuery: '!Forest+(game:paper)+include:extras+unique:prints',
+    defaultSortByDate: true,
+    skipDateSortWhenPlaneswalkerPresent: true,
+    planeswalkerDisplayMode: 'cardName',
+    planeswalkerFilterEnabled: true,
+    detailFlipEnabled: true,
+    detailFlipHint: '↔ Click to flip'
+};
+
+try {
+    DEFAULT_CONFIG = require('./config/default.json');
+} catch (err) {
+    console.warn('Unable to load default config file, using built-in defaults.');
+}
+
+function parseEnvBoolean(name, defaultValue) {
+    if (process.env[name] === undefined) return defaultValue;
+    return ['1', 'true', 'yes', 'on'].includes(String(process.env[name]).trim().toLowerCase());
+}
+
+const CONFIG = {
+    ...DEFAULT_CONFIG,
+    appTitle: process.env.APP_TITLE || DEFAULT_CONFIG.appTitle,
+    scryfallQuery: process.env.SCRYFALL_QUERY || DEFAULT_CONFIG.scryfallQuery,
+    defaultSortByDate: parseEnvBoolean('DEFAULT_SORT_BY_DATE', DEFAULT_CONFIG.defaultSortByDate),
+    skipDateSortWhenPlaneswalkerPresent: parseEnvBoolean('SKIP_DATE_SORT_WHEN_PLANESWALKER_PRESENT', DEFAULT_CONFIG.skipDateSortWhenPlaneswalkerPresent),
+    planeswalkerDisplayMode: process.env.PLANESWALKER_DISPLAY_MODE || DEFAULT_CONFIG.planeswalkerDisplayMode,
+    planeswalkerFilterEnabled: parseEnvBoolean('PLANESWALKER_FILTER_ENABLED', DEFAULT_CONFIG.planeswalkerFilterEnabled),
+    detailFlipEnabled: parseEnvBoolean('DETAIL_FLIP_ENABLED', DEFAULT_CONFIG.detailFlipEnabled),
+    detailFlipHint: process.env.DETAIL_FLIP_HINT || DEFAULT_CONFIG.detailFlipHint
+};
+
+const APP_TITLE = CONFIG.appTitle;
+const SCRYFALL_QUERY = CONFIG.scryfallQuery;
+
 // File paths
 const COLLECTION_FILE = path.join(DATA_DIR, 'collection.json');
 const BOUGHT_FILE = path.join(DATA_DIR, 'bought.json');
@@ -166,6 +204,20 @@ async function writeCardtraderOverrides(overrides) {
 }
 
 // --- Routes ---
+
+// App configuration
+app.get('/api/config', (req, res) => {
+    res.json({
+        appTitle: CONFIG.appTitle,
+        scryfallQuery: CONFIG.scryfallQuery,
+        defaultSortByDate: CONFIG.defaultSortByDate,
+        skipDateSortWhenPlaneswalkerPresent: CONFIG.skipDateSortWhenPlaneswalkerPresent,
+        planeswalkerDisplayMode: CONFIG.planeswalkerDisplayMode,
+        planeswalkerFilterEnabled: CONFIG.planeswalkerFilterEnabled,
+        detailFlipEnabled: CONFIG.detailFlipEnabled,
+        detailFlipHint: CONFIG.detailFlipHint
+    });
+});
 
 // Cardtrader availability
 app.get('/api/cardtrader/available', requireAuth, async (req, res) => {

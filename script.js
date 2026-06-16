@@ -9,6 +9,34 @@ let dataLoaded = false;
 let isAuthenticated = false;
 let pendingGifts = [];
 
+let appConfig = {
+    appTitle: 'Forest Collection Tracker',
+    scryfallQuery: '!Forest+(game:paper)+include:extras+unique:prints',
+    defaultSortByDate: true,
+    skipDateSortWhenPlaneswalkerPresent: true,
+    planeswalkerDisplayMode: 'cardName',
+    planeswalkerFilterEnabled: true
+};
+
+async function fetchAppConfig() {
+    try {
+        const response = await fetch('/api/config');
+        if (response.ok) {
+            const data = await response.json();
+            appConfig = { ...appConfig, ...data };
+        }
+    } catch (error) {
+        console.warn('Unable to load app config:', error);
+    }
+}
+
+function applyAppTitle() {
+    const titleText = appConfig.appTitle || 'Forest Collection Tracker';
+    document.title = titleText;
+    const headerTitle = document.querySelector('.header-title');
+    if (headerTitle) headerTitle.textContent = titleText;
+}
+
 function escapeHtml(value) {
     return String(value)
         .replace(/&/g, '&amp;')
@@ -16,6 +44,33 @@ function escapeHtml(value) {
         .replace(/>/g, '&gt;')
         .replace(/"/g, '&quot;')
         .replace(/'/g, '&#39;');
+}
+
+function getCardImageUrl(card, preferredSizes = ['normal', 'small', 'large', 'png', 'art_crop', 'border_crop']) {
+    if (!card) return '';
+
+    const uris = card.image_uris;
+    if (uris) {
+        for (const size of preferredSizes) {
+            if (uris[size]) {
+                return uris[size];
+            }
+        }
+    }
+
+    if (Array.isArray(card.card_faces)) {
+        for (const face of card.card_faces) {
+            if (face.image_uris) {
+                for (const size of preferredSizes) {
+                    if (face.image_uris[size]) {
+                        return face.image_uris[size];
+                    }
+                }
+            }
+        }
+    }
+
+    return '';
 }
 
 function isCollectionCollected(entry) {
@@ -41,7 +96,8 @@ function makeCollectionCollectedValue(givenBy) {
 // Fetch all Forest cards from Scryfall API
 async function fetchAllForests() {
     const allCards = [];
-    let url = 'https://api.scryfall.com/cards/search?q=!Forest+(game:paper)+include:extras+unique:prints&unique=cards';
+    const query = appConfig.scryfallQuery || '!Forest+(game:paper)+include:extras+unique:prints&unique=cards';
+    let url = 'https://api.scryfall.com/cards/search?q=' + query;
     
     while (url) {
         try {
@@ -62,30 +118,44 @@ async function fetchAllForests() {
     return allCards;
 }
 
-// Sort cards by release date (oldest first), then by collector number
-function sortCards(cards) {
+function isPlaneswalkerCard(card) {
+    if (!card) return false;
+    if (typeof card.type_line === 'string' && card.type_line.includes('Planeswalker')) {
+        return true;
+    }
+    if (Array.isArray(card.card_faces)) {
+        return card.card_faces.some(face => typeof face.type_line === 'string' && face.type_line.includes('Planeswalker'));
+    }
+    return false;
+}
+
+function hasPlaneswalkerCards(cards) {
+    return Array.isArray(cards) && cards.some(card => isPlaneswalkerCard(card));
+}
+
+function sortCards(cards, sortByDate = true) {
     return cards.sort((a, b) => {
-        // First sort by release date
-        const dateA = new Date(a.released_at || '1900-01-01');
-        const dateB = new Date(b.released_at || '1900-01-01');
-        
-        if (dateA.getTime() !== dateB.getTime()) {
-            return dateA.getTime() - dateB.getTime();
+        if (sortByDate) {
+            const dateA = new Date(a.released_at || '1900-01-01');
+            const dateB = new Date(b.released_at || '1900-01-01');
+            if (dateA.getTime() !== dateB.getTime()) {
+                return dateA.getTime() - dateB.getTime();
+            }
         }
-        
-        // If same date, sort by collector number (handle alphanumeric)
+
+        const setA = a.name || '';
+        const setB = b.name || '';
+        if (setA !== setB) {
+            return setA.localeCompare(setB);
+        }
+
         const numA = a.collector_number || '';
         const numB = b.collector_number || '';
-        
-        // Extract numeric part and compare
         const numAInt = parseInt(numA) || 0;
         const numBInt = parseInt(numB) || 0;
-        
         if (numAInt !== numBInt) {
             return numAInt - numBInt;
         }
-        
-        // If numeric parts are equal, compare as strings
         return numA.localeCompare(numB);
     });
 }
@@ -301,7 +371,7 @@ function renderPendingGifts() {
         item.className = 'gift-item';
         item.innerHTML = `
             <div class="gift-card-info">
-                ${card ? `<img src="${card.image_uris?.small || card.image_uris?.normal || ''}" alt="${safeCardName}" class="gift-card-image">` : ''}
+                ${card ? `<img src="${getCardImageUrl(card, ['small', 'normal', 'large', 'png'])}" alt="${safeCardName}" class="gift-card-image">` : ''}
                 <div class="gift-text">
                     <p><strong>${safeGiverName}</strong> gifted you ${card ? `"${safeCardName}"` : 'a card'}.</p>
                     ${card ? `<p class="gift-meta">${setName}${collectorNumber ? ` · #${collectorNumber}` : ''}</p>` : ''}
@@ -627,13 +697,13 @@ function createCardElement(card) {
     
     cardDiv.innerHTML = `
         <div class="card-image-container">
-            <img src="${card.image_uris?.normal || card.image_uris?.small || ''}" 
+            <img src="${getCardImageUrl(card, ['normal', 'small', 'large', 'png'])}" 
                  alt="${card.name}" 
                  class="card-image"
                  onclick="window.location.href='detail.html?id=${card.id}'">
         </div>
         <div class="card-info">
-            <div class="card-set">${card.set_name || 'Unknown Set'}</div>
+            <div class="card-set">${appConfig.planeswalkerDisplayMode === 'cardName' && isPlaneswalkerCard(card) ? card.name : (card.set_name || 'Unknown Set')}</div>
             <div class="card-number">#${card.collector_number || 'N/A'}</div>
             <div class="binder-position">📖 ${binderInfo}</div>
             ${boughtBadge}
@@ -828,6 +898,62 @@ function getUniqueSets(cards) {
     return Array.from(sets).sort();
 }
 
+function getPlaneswalkerCharacters(card) {
+    const characterNames = new Set();
+
+    function addName(name) {
+        if (!name) return;
+        const normalized = String(name).trim();
+        if (!normalized) return;
+        characterNames.add(normalized);
+    }
+
+    function extractNameFromTypeLine(typeLine) {
+        if (typeof typeLine !== 'string') return null;
+        const match = typeLine.match(/Planeswalker\s*[—-]\s*([^/]+)/i);
+        if (match && match[1]) {
+            return match[1].trim();
+        }
+        const index = typeLine.toLowerCase().indexOf('planeswalker');
+        if (index !== -1) {
+            const remainder = typeLine.slice(index + 'planeswalker'.length).replace(/^[\s–—-]+/, '').trim();
+            return remainder || null;
+        }
+        return null;
+    }
+
+    if (Array.isArray(card.card_faces)) {
+        card.card_faces.forEach(face => {
+            const name = extractNameFromTypeLine(face.type_line);
+            if (name) {
+                addName(name);
+            }
+        });
+    }
+
+    if (typeof card.type_line === 'string') {
+        const name = extractNameFromTypeLine(card.type_line);
+        if (name) {
+            addName(name);
+        }
+    }
+
+    return Array.from(characterNames);
+}
+
+function getUniquePlaneswalkerCharacters(cards) {
+    const characters = new Set();
+    cards.forEach(card => {
+        getPlaneswalkerCharacters(card).forEach(name => characters.add(name));
+    });
+    return Array.from(characters).sort((a, b) => a.localeCompare(b));
+}
+
+function cardMatchesPlaneswalker(card, characterName) {
+    if (!characterName) return true;
+    return getPlaneswalkerCharacters(card).includes(characterName);
+}
+
 // Populate set filter dropdown
 function populateSetFilter(cards) {
     const setFilter = document.getElementById('set-filter');
@@ -845,8 +971,35 @@ function populateSetFilter(cards) {
     });
 }
 
-// Filter cards by set and status
-function filterCards(setName, statusFilter) {
+function populatePlaneswalkerFilter(cards) {
+    const filterItem = document.getElementById('planeswalker-filter-item');
+    const filterSelect = document.getElementById('planeswalker-filter');
+    if (!filterItem || !filterSelect) return;
+
+    if (!appConfig.planeswalkerFilterEnabled) {
+        filterItem.style.display = 'none';
+        return;
+    }
+
+    const characters = getUniquePlaneswalkerCharacters(cards);
+    if (!characters.length) {
+        filterItem.style.display = 'none';
+        return;
+    }
+
+    filterItem.style.display = 'block';
+    filterSelect.innerHTML = '<option value="">All Planeswalkers</option>';
+
+    characters.forEach(characterName => {
+        const option = document.createElement('option');
+        option.value = characterName;
+        option.textContent = characterName;
+        filterSelect.appendChild(option);
+    });
+}
+
+// Filter cards by set, status, and planeswalker
+function filterCards(setName, statusFilter, planeswalkerFilter) {
     let filtered = [...allCards];
     
     // Filter by set
@@ -863,6 +1016,11 @@ function filterCards(setName, statusFilter) {
         } else if (statusFilter === 'uncollected') {
             filtered = filtered.filter(card => !isCollected(card.id) && !isBought(card.id));
         }
+    }
+
+    // Filter by planeswalker character
+    if (planeswalkerFilter) {
+        filtered = filtered.filter(card => cardMatchesPlaneswalker(card, planeswalkerFilter));
     }
     
     filteredCards = filtered;
@@ -892,10 +1050,12 @@ function rerenderCards() {
 function handleFilterChange() {
     const setFilter = document.getElementById('set-filter');
     const statusFilter = document.getElementById('status-filter');
+    const planeswalkerFilter = document.getElementById('planeswalker-filter');
     const selectedSet = setFilter.value;
     const selectedStatus = statusFilter.value;
+    const selectedPlaneswalker = planeswalkerFilter ? planeswalkerFilter.value : '';
     
-    const filtered = filterCards(selectedSet, selectedStatus);
+    const filtered = filterCards(selectedSet, selectedStatus, selectedPlaneswalker);
     renderCards(filtered);
 }
 
@@ -905,6 +1065,9 @@ async function init() {
     const cardsGrid = document.getElementById('cards-grid');
     
     try {
+        await fetchAppConfig();
+        applyAppTitle();
+
         // Check authentication and update UI
         await updateAuthUI();
         
@@ -914,19 +1077,25 @@ async function init() {
         // Fetch all cards
         const cards = await fetchAllForests();
         
-        // Sort cards
-        const sortedCards = sortCards(cards);
+        // Sort cards based on config and planeswalker presence
+        const sortByDate = appConfig.defaultSortByDate && !(appConfig.skipDateSortWhenPlaneswalkerPresent && hasPlaneswalkerCards(cards));
+        const sortedCards = sortCards(cards, sortByDate);
         
         // Store globally
         allCards = sortedCards;
         filteredCards = [...allCards];
         
-        // Populate set filter
+        // Populate set filters
         populateSetFilter(sortedCards);
+        populatePlaneswalkerFilter(sortedCards);
         
         // Add event listeners to filters
         document.getElementById('set-filter').addEventListener('change', handleFilterChange);
         document.getElementById('status-filter').addEventListener('change', handleFilterChange);
+        const planeswalkerFilter = document.getElementById('planeswalker-filter');
+        if (planeswalkerFilter && appConfig.planeswalkerFilterEnabled) {
+            planeswalkerFilter.addEventListener('change', handleFilterChange);
+        }
         
         // Hide loading
         loadingDiv.style.display = 'none';

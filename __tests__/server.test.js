@@ -55,6 +55,21 @@ describe('API routes', () => {
             expect(statusRes.status).toBe(200);
             expect(statusRes.body.authenticated).toBe(true);
         });
+
+        test('returns app config including title and scryfall query', async () => {
+            const res = await agent.get('/api/config');
+            expect(res.status).toBe(200);
+            expect(res.body).toEqual(expect.objectContaining({
+                defaultSortByDate: true,
+                skipDateSortWhenPlaneswalkerPresent: true,
+                planeswalkerDisplayMode: 'cardName',
+                planeswalkerFilterEnabled: true,
+                detailFlipEnabled: true,
+                detailFlipHint: '↔ Click to flip'
+            }));
+            expect(typeof res.body.appTitle).toBe('string');
+            expect(typeof res.body.scryfallQuery).toBe('string');
+        });
     });
 
     describe('Collection and bought', () => {
