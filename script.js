@@ -9,6 +9,7 @@ let dataLoaded = false;
 let isAuthenticated = false;
 let pendingGifts = [];
 
+let authUser = null;
 let appConfig = {
     appTitle: 'Forest Collection Tracker',
     scryfallQuery: '!Forest+(game:paper)+include:extras+unique:prints',
@@ -169,13 +170,16 @@ async function checkAuth() {
         if (response.ok) {
             const data = await response.json();
             isAuthenticated = data.authenticated;
+            authUser = data.user || null;
             return isAuthenticated;
         }
         isAuthenticated = false;
+        authUser = null;
         return false;
     } catch (error) {
         console.error('Error checking auth:', error);
         isAuthenticated = false;
+        authUser = null;
         return false;
     }
 }
@@ -230,8 +234,9 @@ async function updateAuthUI() {
         authStatus.style.display = 'flex';
         loginPrompt.style.display = 'none';
         
-        // Get username from session (you might want to add this to the status endpoint)
-        authUsername.textContent = 'Logged in';
+        authUsername.textContent = (authUser && authUser.username)
+            ? `Logged in as ${authUser.username}`
+            : 'Logged in';
         
         // Add logout handler (remove old one first)
         const logoutBtn = document.getElementById('logout-btn');

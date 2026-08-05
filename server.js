@@ -1,6 +1,7 @@
 const express = require('express');
 const fs = require('fs').promises;
 const path = require('path');
+const crypto = require('crypto');
 const cors = require('cors');
 const session = require('express-session');
 const bcrypt = require('bcrypt');
@@ -10,6 +11,11 @@ require('dotenv').config({ quiet: true });
 const app = express();
 const PORT = process.env.PORT || 3000;
 const IS_PRODUCTION = process.env.NODE_ENV === 'production';
+const AUTHENTIK_BASE_URL = process.env.AUTHENTIK_BASE_URL || 'https://authentik.armadio.pro';
+const AUTHENTIK_CLIENT_ID = process.env.AUTHENTIK_CLIENT_ID;
+const AUTHENTIK_CLIENT_SECRET = process.env.AUTHENTIK_CLIENT_SECRET;
+const AUTHENTIK_REDIRECT_URI = process.env.AUTHENTIK_REDIRECT_URI || `http://localhost:${PORT}/auth/callback`;
+const AUTHENTIK_SCOPE = process.env.AUTHENTIK_SCOPE || 'openid profile email';
 
 // Base data directory (overridable for tests)
 const DATA_DIR = process.env.DATA_DIR || path.join(__dirname, 'data');
@@ -125,6 +131,49 @@ async function ensureDataDir() {
     try { await fs.access(CARDTRADER_BLUEPRINTS_CACHE_DIR); } catch { await fs.mkdir(CARDTRADER_BLUEPRINTS_CACHE_DIR, { recursive: true }); }
 }
 ensureDataDir().catch(console.error);
+
+let authentikConfig = null;
+
+function isOauthEnabled() {
+    return !!(AUTHENTIK_BASE_URL && AUTHENTIK_CLIENT_ID && AUTHENTIK_CLIENT_SECRET);
+}
+
+async function getAuthentikConfig() {
+    if (authentikConfig) return authentikConfig;
+    const metadataUrl = new URL('.well-known/openid-configuration', AUTHENTIK_BASE_URL).toString();
+    const response = await fetch(metadataUrl);
+    if (!response.ok) {
+        throw new Error(`Failed to fetch Authentik metadata: ${response.status}`);
+    }
+    authentikConfig = await response.json();
+    return authentikConfig;
+}
+
+async function fetchAuthentikUserInfo(accessToken) {
+    const config = await getAuthentikConfig();
+    if (!config.userinfo_endpoint) return null;
+    const response = await fetch(config.userinfo_endpoint, {
+        headers: {
+            Authorization: `Bearer ${accessToken}`
+        }
+    });
+    if (!response.ok) {
+        console.warn('Unable to fetch userinfo from Authentik:', response.status);
+        return null;
+    }
+    return await response.json();
+}
+
+function normalizeUserInfo(userInfo) {
+    if (!userInfo || typeof userInfo !== 'object') return null;
+    const username = userInfo.preferred_username || userInfo.username || userInfo.email || userInfo.name;
+    return {
+        username: username || null,
+        email: userInfo.email || null,
+        name: userInfo.name || null,
+        raw: userInfo
+    };
+}
 
 // Gifts helpers
 async function readGifts() {
@@ -311,7 +360,79 @@ app.post('/api/logout', (req, res) => {
 });
 
 app.get('/api/auth/status', (req, res) => {
-    res.json({ authenticated: !!(req.session && req.session.authenticated) });
+    res.json({
+        authenticated: !!(req.session && req.session.authenticated),
+        user: req.session?.user || null
+    });
+});
+
+app.get('/auth/login', async (req, res) => {
+    if (!isOauthEnabled()) {
+        return res.status(500).send('OAuth2 login is not configured');
+    }
+    try {
+        const config = await getAuthentikConfig();
+        const state = crypto.randomBytes(16).toString('hex');
+        req.session.oauthState = state;
+
+        const params = new URLSearchParams({
+            response_type: 'code',
+            client_id: AUTHENTIK_CLIENT_ID,
+            redirect_uri: AUTHENTIK_REDIRECT_URI,
+            scope: AUTHENTIK_SCOPE,
+            state
+        });
+        res.redirect(`${config.authorization_endpoint}?${params.toString()}`);
+    } catch (err) {
+        console.error('Auth login error:', err);
+        res.status(500).send('OAuth2 login failed');
+    }
+});
+
+app.get('/auth/callback', async (req, res) => {
+    const { code, state, error, error_description } = req.query;
+    if (error) {
+        return res.status(400).send(`Authentication failed: ${error_description || error}`);
+    }
+    if (!code || !state || state !== req.session?.oauthState) {
+        return res.status(400).send('Invalid OAuth2 callback state');
+    }
+
+    req.session.oauthState = undefined;
+
+    try {
+        const config = await getAuthentikConfig();
+        const tokenResponse = await fetch(config.token_endpoint, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/x-www-form-urlencoded',
+                Authorization: `Basic ${Buffer.from(`${AUTHENTIK_CLIENT_ID}:${AUTHENTIK_CLIENT_SECRET}`).toString('base64')}`
+            },
+            body: new URLSearchParams({
+                grant_type: 'authorization_code',
+                code,
+                redirect_uri: AUTHENTIK_REDIRECT_URI
+            }).toString()
+        });
+
+        if (!tokenResponse.ok) {
+            const body = await tokenResponse.text();
+            console.error('Token exchange failed:', tokenResponse.status, body);
+            return res.status(500).send('OAuth2 token exchange failed');
+        }
+
+        const tokenData = await tokenResponse.json();
+        let user = null;
+        if (tokenData.access_token) {
+            user = await fetchAuthentikUserInfo(tokenData.access_token);
+        }
+        req.session.authenticated = true;
+        req.session.user = normalizeUserInfo(user) || { username: 'Authenticated User' };
+        res.redirect('/');
+    } catch (err) {
+        console.error('Auth callback error:', err);
+        res.status(500).send('OAuth2 callback failed');
+    }
 });
 
 // --- Collection and Bought ---

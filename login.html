@@ -92,50 +92,15 @@
 <body>
     <div class="login-container">
         <h1>🌲 Forest Collection Tracker</h1>
+        <p class="login-description">Use your Authentik account to sign in and manage your collection.</p>
+        <button id="auth-login-button" class="login-button">Login with Authentik</button>
         <div class="error-message" id="error-message"></div>
-        <form class="login-form" id="login-form">
-            <div class="form-group">
-                <label for="username">Username</label>
-                <input type="text" id="username" name="username" required autocomplete="username">
-            </div>
-            <div class="form-group">
-                <label for="password">Password</label>
-                <input type="password" id="password" name="password" required autocomplete="current-password">
-            </div>
-            <button type="submit" class="login-button">Login</button>
-        </form>
+        <p class="login-note">If you are already signed in, refresh this page or return to the main app.</p>
     </div>
 
     <script>
-        document.getElementById('login-form').addEventListener('submit', async (e) => {
-            e.preventDefault();
-            
-            const username = document.getElementById('username').value;
-            const password = document.getElementById('password').value;
-            const errorDiv = document.getElementById('error-message');
-            
-            try {
-                const response = await fetch('/api/login', {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json'
-                    },
-                    body: JSON.stringify({ username, password }),
-                    credentials: 'include'
-                });
-                
-                if (response.ok) {
-                    // Redirect to main page
-                    window.location.href = '/';
-                } else {
-                    const data = await response.json();
-                    errorDiv.textContent = data.error || 'Invalid username or password';
-                    errorDiv.classList.add('show');
-                }
-            } catch (error) {
-                errorDiv.textContent = 'Error connecting to server';
-                errorDiv.classList.add('show');
-            }
+        document.getElementById('auth-login-button').addEventListener('click', () => {
+            window.location.href = '/auth/login';
         });
 
         async function applyLoginTitle() {
