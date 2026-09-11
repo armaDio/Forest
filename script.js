@@ -426,6 +426,7 @@ async function handleAcceptGift(giftId) {
         // Re-render cards and stats with updated collection
         rerenderCards();
         updateStats(filteredCards);
+        refreshSetFilter();
     } catch (error) {
         console.error('Error accepting gift:', error);
         alert('Unable to accept gift. Please try again.');
@@ -846,6 +847,7 @@ async function handleCollect(event, cardId) {
             cardItem.parentNode.replaceChild(createCardElement(card), cardItem);
         }
         updateStats(filteredCards);
+        refreshSetFilter();
         return;
     }
 
@@ -863,6 +865,7 @@ async function handleCollect(event, cardId) {
             cardItem.parentNode.replaceChild(createCardElement(card), cardItem);
         }
         updateStats(filteredCards);
+        refreshSetFilter();
     });
 }
 
@@ -959,9 +962,21 @@ function cardMatchesPlaneswalker(card, characterName) {
     return getPlaneswalkerCharacters(card).includes(characterName);
 }
 
+function isExpansionFullyCollected(setName, cards) {
+    const setCards = cards.filter(card => card.set_name === setName);
+    return setCards.length > 0 && setCards.every(card => isCollected(card.id));
+}
+
+function refreshSetFilter() {
+    if (allCards.length) {
+        populateSetFilter(allCards);
+    }
+}
+
 // Populate set filter dropdown
 function populateSetFilter(cards) {
     const setFilter = document.getElementById('set-filter');
+    const selectedValue = setFilter.value;
     const sets = getUniqueSets(cards);
     
     // Clear existing options except "All Expansions"
@@ -970,10 +985,19 @@ function populateSetFilter(cards) {
     // Add each set as an option
     sets.forEach(setName => {
         const option = document.createElement('option');
+        const completed = isExpansionFullyCollected(setName, cards);
         option.value = setName;
-        option.textContent = setName;
+        option.textContent = completed ? `${setName} ✓` : setName;
+        if (completed) {
+            option.className = 'expansion-complete';
+            option.title = 'Fully collected';
+        }
         setFilter.appendChild(option);
     });
+
+    if (selectedValue && sets.includes(selectedValue)) {
+        setFilter.value = selectedValue;
+    }
 }
 
 function populatePlaneswalkerFilter(cards) {

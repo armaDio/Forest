@@ -146,6 +146,11 @@ header h1 {
     box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
 }
 
+#set-filter option.expansion-complete {
+    color: #11998e;
+    font-weight: 600;
+}
+
 .stats {
     display: flex;
     justify-content: space-around;
